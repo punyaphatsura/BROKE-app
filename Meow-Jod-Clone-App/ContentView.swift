@@ -8,17 +8,37 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var selectedTab = 0
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        TabView(selection: $selectedTab) {
+            HomeView()
+                .tabItem {
+                    Label("Home", systemImage: "house")
+                }
+                .tag(0)
+            
+            ScannerView()
+                .tabItem {
+                    Label("Scan", systemImage: "doc.text.viewfinder")
+                }
+                .tag(1)
+            
+            TransactionListView()
+                .tabItem {
+                    Label("Transactions", systemImage: "list.bullet")
+                }
+                .tag(2)
+            
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(3)
+        }.ignoresSafeArea()
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView().environmentObject(TransactionStore())
 }

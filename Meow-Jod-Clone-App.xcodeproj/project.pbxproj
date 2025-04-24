@@ -29,9 +29,22 @@
 		161CF5F12DB4EBA3008B3DE2 /* Meow-Jod-Clone-AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Meow-Jod-Clone-AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		161CF62A2DB4F37F008B3DE2 /* Exceptions for "Meow-Jod-Clone-App" folder in "Meow-Jod-Clone-App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 161CF5D92DB4EBA1008B3DE2 /* Meow-Jod-Clone-App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		161CF5DC2DB4EBA1008B3DE2 /* Meow-Jod-Clone-App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				161CF62A2DB4F37F008B3DE2 /* Exceptions for "Meow-Jod-Clone-App" folder in "Meow-Jod-Clone-App" target */,
+			);
 			path = "Meow-Jod-Clone-App";
 			sourceTree = "<group>";
 		};
@@ -395,8 +408,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GQRATMC98W;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Meow-Jod-Clone-App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = MeoaJotClone;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -422,8 +438,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GQRATMC98W;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Meow-Jod-Clone-App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = MeoaJotClone;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
