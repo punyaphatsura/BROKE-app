@@ -17,9 +17,11 @@ struct TransactionRow: View {
                 Text(transaction.description)
                     .font(.headline)
                 
-                Text(transaction.category)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                if let category = transaction.categoryId {
+                    Text(category.rawValue)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
                 
                 Text(transaction.date, style: .date)
                     .font(.caption)

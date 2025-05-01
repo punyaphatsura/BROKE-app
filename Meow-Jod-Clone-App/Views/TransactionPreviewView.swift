@@ -34,7 +34,7 @@ struct TransactionPreviewView: View {
                     
                     DatePicker("Date", selection: $transaction.date, displayedComponents: .date)
                     
-                    TextField("Category", text: $transaction.category)
+//                    TextField("Category", text: $transaction.category)
                 }
                 
                 Section {

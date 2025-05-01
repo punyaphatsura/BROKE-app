@@ -44,7 +44,6 @@ struct AddTransactionView: View {
                             description: description,
                             date: date,
                             type: type,
-                            category: category.isEmpty ? (type == .income ? "Income" : "Expense") : category,
                             source: .manual
                         )
                         

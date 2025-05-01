@@ -30,9 +30,10 @@ enum TransactionCategory: String, Codable {
 }
 
 enum Bank: String, Codable {
-    case kbank
-    case ktb
-    case scb
+    case KBANK = "KBank"
+    case KTB = "KTB"
+    case SCB = "SCB"
+    case MAKE = "MAKE"
 }
 
 struct Transaction: Identifiable, Codable {
@@ -41,11 +42,13 @@ struct Transaction: Identifiable, Codable {
     var amount: Double
     var description: String
     var date: Date
+    var sender: String?
+    var receiver: String?
     var type: TransactionType
-    var category: String
     var source: TransactionSource
     var categoryId: TransactionCategory?
     var bank: Bank?
+    var imagePath: String?
     
     enum TransactionSource: String, Codable {
         case manual
