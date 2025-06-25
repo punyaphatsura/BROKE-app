@@ -48,16 +48,69 @@ struct ScannerView: View {
     }
     
     private var scanningProgressView: some View {
-        VStack(spacing: 20) {
-            Text("Scanning Bank Slips...")
-                .font(.headline)
-            ProgressView(value: Double(processedImageCount), total: Double(totalImagesToProcess))
-                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                .padding()
-            Text("Processed \(processedImageCount) of \(totalImagesToProcess) images")
-                .font(.subheadline)
+        VStack(spacing: 30) {
+            // Waiting/Processing Image with Animation
+            VStack(spacing: 20) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
+                    .scaleEffect(isScanning ? 1.3 : 1.0)
+                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isScanning)
+                
+                // Rotating dots animation
+                HStack(spacing: 8) {
+                    ForEach(0..<3) { index in
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                            .scaleEffect(isScanning ? 1.2 : 0.8)
+                            .animation(
+                                .easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.2),
+                                value: isScanning
+                            )
+                    }
+                }
+            }
+            
+            VStack(spacing: 16) {
+                Text("Scanning Bank Slips...")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                // Progress Bar with enhanced styling
+                VStack(spacing: 12) {
+                    ProgressView(value: Double(processedImageCount), total: Double(totalImagesToProcess))
+                        .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                        .scaleEffect(x: 1, y: 2.5, anchor: .center)
+                        .background(Color(.systemGray5))
+                        .cornerRadius(4)
+                    
+                    HStack {
+                        Text("Processed \(processedImageCount) of \(totalImagesToProcess) images")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Text("\(Int((Double(processedImageCount) / Double(totalImagesToProcess)) * 100))%")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
         }
-        .padding()
+        .padding(40)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        )
+        .padding(.horizontal, 20)
     }
     
     private var mainScannerView: some View {

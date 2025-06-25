@@ -9,10 +9,14 @@ import SwiftUI
 
 @main
 struct Meow_Jod_Clone_AppApp: App {
+    @StateObject var transactionStore = TransactionStore()
+    @StateObject var photoFetcher = PhotoFetcher()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(TransactionStore())
+                .environmentObject(transactionStore)
+                .environmentObject(photoFetcher)
         }
     }
 }

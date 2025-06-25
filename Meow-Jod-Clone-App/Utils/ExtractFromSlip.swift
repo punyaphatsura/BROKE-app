@@ -89,7 +89,7 @@ struct ExtractFromSlip {
                 continue
             }
         }
-        
+
         receiver = receiver.replacingOccurrences(of: "0 ", with: "")
 
         return [
@@ -117,7 +117,7 @@ struct ExtractFromSlip {
         )
         
         let replacedText = text.replacingOccurrences(of: "จ่ายละจิง\n", with: "")
-            .replacingOccurrences(of: "\nPrompt\nPay", with: "\nPrompt Pay")
+            .replacingOccurrences(of: "\nPrompt\nPay", with: "\nPrompt Pay").replacingOccurrences(of: "\nจำนวน:", with: "").replacingOccurrences(of: "\nค่าธรรมเนียม:", with: "").replacingOccurrences(of: "\n0.00 บาท", with: "").replacingOccurrences(of: "\nสแกนตรวจสอบสลิป", with: "").replacingOccurrences(of: "\nK+", with: "").replacingOccurrences(of: "\n0 บาท", with: "")
         let lines = replacedText.components(separatedBy: "\n")
         
         // 2. Date & Time from line 1
@@ -148,18 +148,10 @@ struct ExtractFromSlip {
             receiver = lines[6]
         }
 
-        if lines.count > 9 {
-            if lines[9].contains("เลขที่รายการ") {
-                amount = lines[12].replacingOccurrences(of: " บาท", with: "")
-                    .replacingOccurrences(of: ",", with: "")
-                if lines[11].contains("จำนวน") {
-                    refId = lines[10]
-                }
-                else if lines[10].contains("จำนวน") {
-                    refId = lines[11]
-                }
-            }
-        }
+        let lastIndex = lines.count - 1
+        amount = lines[lastIndex].replacingOccurrences(of: " บาท", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        refId = lines[lastIndex - 1]
         
         return [
             "bank":     bank,
@@ -308,7 +300,10 @@ struct ExtractFromSlip {
         var sender   = "-"
         var receiver = "-"
         var amount   = "-"
-        var refId = "-"
+        var refId    = "-"
+        
+        for (i, l) in text.split(separator: "\n").enumerated(){
+                    print("[\(i)] \(l)")}
 
         // 1. Bank detection (simple keyword match)
         if text.contains("Krungthai") {
@@ -334,12 +329,6 @@ struct ExtractFromSlip {
             NSRegularExpression(pattern: "(\\d{1,2} [ก-ธ]+\\.? ?\\d{2,4})[ -]+(\\d{2}:\\d{2})", options: []),
             NSRegularExpression(pattern: "(\\d{1,2} [ก-ธ]+\\.? ?\\d{2,4}) (\\d{2}:\\d{2}) น\\.", options: [])
         ]
-        
-        print("\nBank: \(bank)")
-        for i in 0..<lines.count {
-            print("[\(i)] \(lines[i])")
-        }
-        print()
 
         for line in lines {
             // A) Date & Time
@@ -407,15 +396,6 @@ struct ExtractFromSlip {
             }
         }
         
-        print([
-            "bank":     bank,
-            "date":     date,
-            "sender":   sender,
-            "receiver": receiver,
-            "amount":   amount,
-            "refId":    refId
-        ])
-
         return [
             "bank":     bank,
             "date":     date,
