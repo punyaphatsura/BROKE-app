@@ -6,17 +6,29 @@
 //
 
 import SwiftUI
+import FirebaseCore
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    FirebaseApp.configure()
+    return true
+  }
+}
 
 @main
 struct Meow_Jod_Clone_AppApp: App {
+    // register app delegate for Firebase setup
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    
     @StateObject var transactionStore = TransactionStore()
-    @StateObject var photoFetcher = PhotoFetcher()
+    @StateObject var photoService = PhotoService()
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(transactionStore)
-                .environmentObject(photoFetcher)
+                .environmentObject(photoService)
         }
     }
 }

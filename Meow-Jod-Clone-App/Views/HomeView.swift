@@ -7,434 +7,320 @@
 
 import SwiftUI
 import PhotosUI
-import Vision
-
-struct ErrorTransaction: Identifiable {
-    let id = UUID()
-    let image: UIImage
-    let text: String
-}
+import Photos
 
 struct HomeView: View {
     @EnvironmentObject var transactionStore: TransactionStore
-    @EnvironmentObject var photoFetcher: PhotoFetcher
-    @State private var showingAddTransaction = false
+    @EnvironmentObject var photoService: PhotoService
+    @StateObject private var scannerViewModel = SlipScannerViewModel()
+    @StateObject private var viewModel = HomeViewModel()
+    @Environment(\.scenePhase) var scenePhase
     
-    @State private var isScanning = false
-    @State private var transactionList: [Transaction] = []
-    @State private var extractedTransaction: Transaction?
-    @State private var showingTransactionPreview = false
-    @State private var albumList: PHFetchResult<PHAssetCollection>? = nil
-    @State private var totalImagesToProcess = 0
-    @State private var processedImageCount = 0
-    @State private var imageQueue: [UIImage] = []
-    @State private var isProcessingOCR = false
-    @State private var hasAttemptedAutoScan = false
-    @State private var errorTransaction: [ErrorTransaction] = []
+    @State private var newSlipsCount: Int = 0
+    @State private var showingQuotaAlert = false
+    
+    // Computed properties for counts
+    var unprocessedCount: Int {
+        photoService.assets.filter { !ImageHashManager.shared.isProcessed(asset: $0) }.count
+    }
+    
+    var processedCount: Int {
+        newSlipsCount - unprocessedCount
+    }
     
     var body: some View {
         NavigationView {
             VStack {
-                // Summary Card
-                // VStack(spacing: 20) {
-                //     Text("Balance")
-                //         .font(.headline)
-                //     Text("$\(transactionStore.balance(), specifier: "%.2f")")
-                //         .font(.largeTitle)
-                //         .fontWeight(.bold)
-                    
-                //     HStack(spacing: 40) {
-                //         VStack {
-                //             Text("Income")
-                //                 .font(.subheadline)
-                //             Text("$\(transactionStore.totalIncome(), specifier: "%.2f")")
-                //                 .foregroundColor(.green)
-                //         }
-                        
-                //         VStack {
-                //             Text("Expenses")
-                //                 .font(.subheadline)
-                //             Text("$\(transactionStore.totalExpense(), specifier: "%.2f")")
-                //                 .foregroundColor(.red)
-                //         }
-                //     }
-                // }
-                // .padding()
-                // .background(Color(.systemGray6))
-                // .cornerRadius(12)
-                // .padding()
+                lastBatchScannedView
                 
-                // Recent Transactions
-                VStack(alignment: .leading) {
-                    Text("Recent Transactions")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    List {
-                        ForEach(Array(transactionStore.transactions.prefix(5))) { transaction in
-                            TransactionRow(transaction: transaction)
-                        }
-                    }
-                    .listStyle(PlainListStyle())
-                }
+                monthNavigation
                 
-                if isScanning {
-                    VStack(spacing: 20) {
-                        // Waiting/Processing Image
-                        Image(systemName: "doc.text.viewfinder")
-                            .font(.system(size: 60))
-                            .foregroundColor(.blue)
-                            .scaleEffect(isScanning ? 1.2 : 1.0)
-                            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isScanning)
-                        
-                        Text("Scanning Bank Slips...")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        // Progress Bar
-                        VStack(spacing: 8) {
-                            ProgressView(value: Double(processedImageCount), total: Double(totalImagesToProcess))
-                                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                                .scaleEffect(x: 1, y: 2, anchor: .center)
-                            
-                            Text("Processed \(processedImageCount) of \(totalImagesToProcess) images")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                }
-                
-                else {
-                    if !transactionList.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Extracted Transactions")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            Text("Successfully extracted \(transactionList.count) transactions from \(photoFetcher.images.count) images")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            
-                            scannedResultList
-                        }
-                    }
-                    if (!errorTransaction.isEmpty) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Error Transactions")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            Text("Error extracted \(errorTransaction.count) transactions from \(photoFetcher.images.count) images")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            ScrollView{
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(errorTransaction) { errorItem in
-                                        Image(uiImage: errorItem.image)
-                                            .resizable()
-                                            .frame(width: 150, height: 150)
-                                            .cornerRadius(8)
-                                            .shadow(radius: 2)
-                                        Text(errorItem.text)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                VStack(alignment: .leading) {
-                    Text("Bank Slip Images")
-                        .font(.headline)
-                        .padding(.horizontal)
-
-                    if photoFetcher.images.isEmpty {
-                        Text("No images found.")
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                    } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Found \(photoFetcher.images.count) images")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(photoFetcher.images, id: \.self) { image in
-                                        Image(uiImage: image)
-                                            .resizable()
-                                            .frame(width: 150, height: 150)
-                                            .cornerRadius(8)
-                                            .shadow(radius: 2)
-                                    }
-                                }.padding(.horizontal)
-                            }
-                        }
-                    }
-                }
+                transactionList
                 
                 Spacer()
             }
-            .navigationTitle("Dashboard")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingAddTransaction = true
-                    }) {
-                        Image(systemName: "plus")
+                toolbarContent
+            }
+            .navigationTitle("BROKE")
+            .sheet(isPresented: $viewModel.showingAddTransaction) {
+                AddTransactionView() // Manual add
+            }
+            .sheet(item: $viewModel.selectedTransactionForReview) { transaction in
+                AddTransactionView(transactionToEdit: transaction)
+            }
+            .alert("Limit Exceeded", isPresented: $showingQuotaAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("The daily limit for Gemini API has been reached. Please try again later.")
+            }
+            .onReceive(photoService.$isLoadingComplete) { isComplete in
+                if isComplete {
+                    triggerBatchScan()
+                }
+            }
+            .onReceive(scannerViewModel.$processedSlipData) { slipData in
+                if let slipData = slipData {
+                    saveTransactionFromSlip(slipData)
+                }
+            }
+            .onReceive(scannerViewModel.$errorMessage) { error in
+                // Check for quota error in message if it bubbles up here,
+                // but ideally we check the flag from VM if exposed or just string match
+                if let error = error, (error.contains("quota") || error.contains("429") || error.contains("RESOURCE_EXHAUSTED")) {
+                    showingQuotaAlert = true
+                } else if let error = error, !error.isEmpty {
+                    // Show other errors if needed, or handle them elsewhere
+                    print("Scanner Error: \(error)")
+                }
+            }
+            .onAppear {
+                updateTransactionsList()
+                if newSlipsCount == 0 && unprocessedCount > 0 {
+                    self.newSlipsCount = unprocessedCount
+                }
+            }
+            .onChange(of: viewModel.currentMonth) { _ in updateTransactionsList() }
+            .onChange(of: viewModel.currentYear) { _ in updateTransactionsList() }
+        }
+    }
+    
+    // MARK: - Subviews
+    
+    private var lastBatchScannedView: some View {
+        Group {
+            if !viewModel.recentScannedTransactions.isEmpty {
+                VStack(alignment: .leading) {
+                    HStack() {
+                        Text("Last Scanned Batch (\(viewModel.recentScannedTransactions.count)/\(newSlipsCount))")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        Spacer()
+                        statisticsSection
                     }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(viewModel.recentScannedTransactions) { transaction in
+                                TransactionThumbnailView(transaction: transaction)
+                                    .onTapGesture {
+                                        viewModel.selectedTransactionForReview = transaction
+                                    }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+        }
+    }
+    
+    private var monthNavigation: some View {
+        HStack {
+            Button(action: viewModel.previousMonth) {
+                Image(systemName: "chevron.left")
+                    .padding()
+            }
+            
+            Text(viewModel.monthYearString)
+                .font(.title2)
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity)
+            
+            Button(action: viewModel.nextMonth) {
+                Image(systemName: "chevron.right")
+                    .padding()
+            }
+            .disabled(viewModel.isCurrentMonthAndYear)
+        }
+        .padding(.horizontal)
+    }
+    
+    private var transactionList: some View {
+        VStack(alignment: .leading) {
+            List {
+                ForEach(Array(transactionStore.transactions)) { transaction in
+                    TransactionRow(transaction: transaction)
+                }
+            }
+            .listStyle(PlainListStyle())
+            .refreshable {
+                await refreshData()
+            }
+        }
+    }
+    
+    private var statisticsSection: some View {
+        Group {
+            if !photoService.assets.isEmpty {
+                HStack(spacing: 12) {
+                    if scannerViewModel.isProcessing {
+                        processingIndicator
+                    } else if unprocessedCount > 0 {
+                        scanButton
+                    }
+                }
+                .padding(.trailing, 16)
+            }
+        }
+    }
+    
+    private var processingIndicator: some View {
+        HStack {
+            ProgressView()
+                .padding(.trailing, 5)
+        }
+        .padding(.vertical, 5)
+    }
+    
+    private var scanButton: some View {
+        Button(action: {
+            triggerBatchScan()
+        }) {
+            HStack {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                Text("Scan Remaining (\(unprocessedCount))")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundColor(.white)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .background(Color.blue)
+            .cornerRadius(15)
+        }
+    }
+    
+    private var toolbarContent: some ToolbarContent {
+        Group {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    transactionStore.clearAllTransactions()
+                    ImageHashManager.shared.clearHistory()
+                    triggerBatchScan()
+                }) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    viewModel.showingAddTransaction = true
+                }) {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func updateTransactionsList() {
+        transactionStore.transactions = viewModel.getTransactions(from: transactionStore)
+    }
+    
+    private func saveTransactionFromSlip(_ slipData: SlipData) {
+        viewModel.saveTransactionFromSlip(slipData, into: transactionStore) { data in
+            scannerViewModel.suggestCategory(for: data)
+        }
+        
+        // Refresh list if added transaction belongs to current view
+        let calendar = Calendar.current
+        let transMonth = calendar.component(.month, from: slipData.parsedDate ?? Date())
+        let transYear = calendar.component(.year, from: slipData.parsedDate ?? Date())
+        
+        if transMonth == viewModel.currentMonth && transYear == viewModel.currentYear {
+            updateTransactionsList()
+        }
+        
+        // Optional: Provide feedback (haptic or toast)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+    
+    private func triggerBatchScan() {
+        print("Starting batch scan...")
+        // Only reset if we are starting a fresh batch
+        if unprocessedCount > 0 {
+            // Set the fixed count for this batch
+            self.newSlipsCount = viewModel.recentScannedTransactions.count + unprocessedCount
+        }
+        scannerViewModel.processBatch(assets: photoService.assets) { count in
+            print("Batch processed: \(count) assets")
+        }
+    }
+    
+    private func refreshData() async {
+        photoService.fetchPhotos()
+        
+        try? await Task.sleep(nanoseconds: 1 * 1_000_000_000)
+        
+        await MainActor.run {
+            triggerBatchScan()
+            updateTransactionsList()
+        }
+    }
+}
+
+struct TransactionThumbnailView: View {
+    let transaction: Transaction
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Top row: Bank Icon and Amount
+            HStack {
+                if let bank = transaction.bank, let iconName = bank.iconName {
+                     Image(iconName) // Assuming you have assets for bank icons
+                         .resizable()
+                         .scaledToFit()
+                         .frame(width: 24, height: 24)
+                         .cornerRadius(4)
+                } else {
+                    Image(systemName: "building.columns.fill")
+                        .foregroundColor(.gray)
+                        .frame(width: 24, height: 24)
                 }
                 
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        print("[DEBUG] Manual scan triggered with \(photoFetcher.images.count) images")
-                        hasAttemptedAutoScan = false
-                        processImages()
-                    }) {
-                        Image(systemName: "doc.text.viewfinder")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionView()
-            }
-            .onReceive(photoFetcher.$isLoadingComplete) { isComplete in
-                if isComplete && !isScanning && transactionList.isEmpty {
-                     processImages()
-                }
-            }
-        }
-    }
-    
-    private var scannedResultList: some View {
-        ScrollView {
-            Text("Transaction Number: \(transactionList.count)")
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(transactionList) { t in
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let refId = t.refId {
-                            Text("Reference ID: \(refId)").font(.headline)
-                        }
-                        
-                        if let bank = t.bank {
-                            Text("Bank: \(bank.rawValue)").font(.headline)
-                        }
-                        
-                        Text("Date: \(formattedDate(t.date))")
-
-                        Text("Type: \(t.type == .expense ? "Expense" : "Income")")
-                        Text("Amount: \(String(format: "%.2f", t.amount))")
-                        
-                        if let sender = t.sender {
-                            Text("Sender: \(sender)")
-                        }
-                        
-                        if let receiver = t.receiver {
-                            Text("Receiver: \(receiver)")
-                        }
-                        
-                        if let category = t.categoryId {
-                            Text("Category: \(category.rawValue)")
-                        }
-                        
-                        if let imagePath = t.imagePath,
-                           let uiImage = UIImage(contentsOfFile: imagePath) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFit()
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    .onLongPressGesture {
-                        UIPasteboard.general.string = t.description
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-    
-    private func processImages() {
-        guard !photoFetcher.images.isEmpty else {
-            return
-        }
-        
-        print("🔍 Processing \(photoFetcher.images.count) images for OCR")
-        transactionList.removeAll()
-        totalImagesToProcess = photoFetcher.images.count
-        processedImageCount = 0
-        isScanning = true
-        imageQueue.removeAll()
-        isProcessingOCR = false
-        
-        for (index, image) in photoFetcher.images.enumerated() {
-            DispatchQueue.main.async {
-                self.imageQueue.append(image)
-                self.startNextOCRIfNeeded()
-            }
-        }
-    }
-    
-    private func startNextOCRIfNeeded() {
-        guard !isProcessingOCR else { return }
-        guard !imageQueue.isEmpty else { return }
-        
-        isProcessingOCR = true
-        let image = imageQueue.removeFirst()
-        recognizeTextSequentially(image: image)
-    }
-    
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.dateFormat = "dd MMM yyyy"
-        let calendar = Calendar(identifier: .buddhist)
-        formatter.calendar = calendar
-        let thaiDate = formatter.string(from: date)
-        
-        // Convert Buddhist year to AD year
-        let components = thaiDate.components(separatedBy: " ")
-        if components.count == 3,
-           let buddhistYear = Int(components[2]) {
-            let adYear = buddhistYear - 543
-            return "\(components[0]) \(components[1]) \(adYear)"
-        }
-        return thaiDate
-    }
-    
-    func parseThaiDate(_ dateString: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "th_TH")
-        
-        // Clean up the string and extract components
-        let clean = dateString.trimmingCharacters(in: .whitespaces)
-        let components = clean.components(separatedBy: .whitespaces)
-        
-        guard components.count >= 3 else { return nil }
-        
-        // Convert 2-digit year to 4-digit year (25xx)
-        if let yearStr = components.last, let twoDigitYear = Int(yearStr) {
-            let fullYear = 2500 + twoDigitYear // Convert Buddhist year to AD
-            
-            // Reconstruct date string with 4-digit year
-            let dateWithFullYear = "\(components[0]) \(components[1]) \(fullYear)"
-            
-            formatter.dateFormat = "d MMM yyyy"
-            return formatter.date(from: dateWithFullYear)
-        }
-        
-        return nil
-    }
-
-    private func recognizeTextSequentially(image: UIImage) {
-        guard let cgImage = image.cgImage else {
-            incrementProcessedImageCount()
-            isProcessingOCR = false
-            startNextOCRIfNeeded()
-            return
-        }
-        
-        let request = VNRecognizeTextRequest { request, error in
-            if let error = error {
-                print("Text recognition error: \(error)")
-                self.incrementProcessedImageCount()
-                self.isProcessingOCR = false
-                self.startNextOCRIfNeeded()
-                return
+                Spacer()
+                
+                Text(transaction.amount.formattedCurrency)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.primary)
             }
             
-            guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                self.incrementProcessedImageCount()
-                self.isProcessingOCR = false
-                self.startNextOCRIfNeeded()
-                return
-            }
+            Spacer()
             
-            let recognizedStrings = observations.compactMap { $0.topCandidates(1).first?.string }
-            DispatchQueue.main.async {
-                var imagePath = ""
-                if let data = image.jpegData(compressionQuality: 1.0) {
-                    let filename = UUID().uuidString + ".jpg"
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-                    do {
-                        try data.write(to: tempURL)
-                        imagePath = tempURL.path()
-                    } catch {
-                        print("Error saving image:", error)
-                    }
-                }
-                let combinedText = recognizedStrings.joined(separator: "\n")
-                let transactionData = ExtractFromSlip.extractTransactionData(from: combinedText)
-                print(transactionData)
-                if let refId = transactionData["refId"],
-                   let amountString = transactionData["amount"],
-                   let bankRaw = transactionData["bank"],
-                   let dateString = transactionData["date"],
-                   let parsedDate = parseThaiDate(dateString),
-                   let receiver = transactionData["receiver"],
-                   let sender = transactionData["sender"],
-                   let amount = Double(amountString.replacingOccurrences(of: ",", with: "")),
-                   let bank = Bank(rawValue: bankRaw)
-                {
-                    print("✅ Extracted transaction: \(refId) - \(amount) from \(bank.rawValue)")
-                    let transaction = Transaction(
-                        refId: refId,
-                        amount: amount,
-                        description: "",
-                        date: parsedDate,
-                        sender: sender,
-                        receiver: receiver,
-                        type: .expense,
-                        source: .scan,
-                        bank: bank,
-                        imagePath: imagePath
-                    )
-
-                    self.transactionList.append(transaction)
+            // Middle: Category Icon
+            HStack {
+                Spacer()
+                if let category = transaction.categoryId {
+                    Image(systemName: category.icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(category.color)
+                } else if let incomeCategory = transaction.incomeCategoryId {
+                    Image(systemName: incomeCategory.icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(incomeCategory.color)
                 } else {
-                    print("❌ Failed to extract transaction from image")
-                    self.errorTransaction.append(ErrorTransaction(image: image, text: combinedText))
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
                 }
-                self.incrementProcessedImageCount()
-                self.isProcessingOCR = false
-                self.startNextOCRIfNeeded()
+                Spacer()
             }
+            
+            Spacer()
+            
+            // Bottom: Date
+            Text(transaction.date, style: .date)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
         }
-        
-        request.recognitionLanguages = ["th-TH", "en-US"]
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
-            } catch {
-                print("Unable to perform text recognition: \(error)")
-                DispatchQueue.main.async {
-                    self.incrementProcessedImageCount()
-                    self.isProcessingOCR = false
-                    self.startNextOCRIfNeeded()
-                }
-            }
-        }
-    }
-
-    
-    private func incrementProcessedImageCount() {
-        processedImageCount += 1
-        if processedImageCount >= totalImagesToProcess {
-            isScanning = false
-            print("🎯 Finished processing. Extracted \(transactionList.count) transactions from \(totalImagesToProcess) images")
-        }
+        .padding(8)
+        .frame(width: 120, height: 100)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
 }

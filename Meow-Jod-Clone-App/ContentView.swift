@@ -18,23 +18,17 @@ struct ContentView: View {
                 }
                 .tag(0)
             
-            ScannerView()
-                .tabItem {
-                    Label("Scan", systemImage: "doc.text.viewfinder")
-                }
-                .tag(1)
-            
             TransactionListView()
                 .tabItem {
                     Label("Transactions", systemImage: "list.bullet")
                 }
-                .tag(2)
+                .tag(1)
             
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(2)
         }.ignoresSafeArea()
     }
 }

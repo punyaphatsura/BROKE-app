@@ -8,6 +8,14 @@
 	<string>We need your photo library access to scan bank slips and extract transaction data.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>BROKE</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIImageName</key>

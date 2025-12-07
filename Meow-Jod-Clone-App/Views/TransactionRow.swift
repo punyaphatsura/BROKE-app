@@ -10,40 +10,56 @@ import SwiftUI
 struct TransactionRow: View {
     @EnvironmentObject var transactionStore: TransactionStore
     let transaction: Transaction
+    @State private var showingEditSheet = false
     
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text(transaction.description)
-                    .font(.headline)
-                
-                if let category = transaction.categoryId {
-                    Text(category.rawValue)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                if transaction.type == .expense {
+                    if let categoryId = transaction.categoryId,
+                       let category = ExpenseCategory(rawValue: categoryId.rawValue) {
+                        Text(category.displayName)
+                            .font(.headline)
+                    }
+                } else {
+                    if let categoryId = transaction.incomeCategoryId,
+                       let category = IncomeCategory(rawValue: categoryId.rawValue) {
+                        Text(category.displayName)
+                            .font(.headline)
+                    }
                 }
                 
+                
+                Text(transaction.description)
+                    .font(.subheadline)
+                        .foregroundColor(.secondary)
+           
                 Text(transaction.date, style: .date)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
-            
             VStack(alignment: .trailing) {
-                Text("$\(transaction.amount, specifier: "%.2f")")
+                Text(transaction.amount.formattedCurrency)
                     .font(.headline)
                     .foregroundColor(transaction.type == .income ? .green : .red)
-                
-                Text(transaction.source.rawValue.capitalized)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
-        .padding(.vertical, 4).swipeActions(edge: .trailing) {
-            Button(role: .destructive) { transactionStore.deleteTransactionById(transaction.id)} label: {
+        .padding(.vertical, 4)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                transactionStore.deleteTransactionById(transaction.id)
+            } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            AddTransactionView(transactionToEdit: transaction)
+                .environmentObject(transactionStore)
+        }
+        .onTapGesture() {
+            showingEditSheet = true
         }
     }
 }

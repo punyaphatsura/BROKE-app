@@ -40,6 +40,14 @@ struct SettingsView: View {
                 
                 Section(header: Text("About")) {
                     HStack {
+                        Text("App Name")
+                        Spacer()
+                        Text("BROKE — Bank Slip Recorder, Organizer & Knowledge Extractor")
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    HStack {
                         Text("Version")
                         Spacer()
                         Text("1.0.0")
