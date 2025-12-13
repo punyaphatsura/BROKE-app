@@ -98,3 +98,6 @@ iOSInjectionProject/
 slip_img
 .vscode
 GoogleService-Info.plist
+
+# Secrets
+Meow-Jod-Clone-App/Utils/Secrets.swift

@@ -48,7 +48,8 @@ struct SlipData {
             "dd/MM/yyyy",
             "dd/MM/yy",
             "yyyy-MM-dd",
-            "dd-MM-yyyy"
+            "dd-MM-yyyy",
+            "yyyy-MM-dd HH:mm:ss"
         ]
         
         let thaiMonths = [

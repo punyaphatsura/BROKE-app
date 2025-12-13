@@ -50,6 +50,24 @@ enum Bank: String, CaseIterable, Codable, Identifiable {
     static func from(string: String) -> Bank {
         let lowercased = string.lowercased()
         
+        // Check for bank codes first
+        switch string {
+        case "004": return .kbank
+        case "014": return .scb
+        case "006": return .ktb
+        case "002": return .bbl
+        case "011": return .ttb
+        case "030": return .gsb
+        case "025": return .bay
+        case "022": return .cimb
+        case "024": return .uob
+        case "067": return .tisco
+        case "073": return .lhb
+        case "069": return .kk
+        case "065": return .tbank // Legacy Thanachart
+        default: break
+        }
+        
         if lowercased.contains("kbank") || lowercased.contains("kasikorn") || lowercased.contains("กสิกร") {
             return .kbank
         } else if lowercased.contains("make") {

@@ -81,18 +81,36 @@ class SlipScannerViewModel: NSObject, ObservableObject {
             self.backgroundTaskID = .invalid
         }
         
-        executeBatchProcessing(assets: assets, retryCount: 0, totalProcessed: 0) { count in
-            completion(count)
+        Task {
+            var useGeminiOnly = false
+            do {
+                let quota = try await slipExtractor.checkSlipOKQuota()
+                print("SlipOK Quota: \(quota), Assets: \(assets.count)")
+                if assets.count > quota {
+                    useGeminiOnly = true
+                    print("Batch size exceeds quota. Switching to Gemini only.")
+                }
+            } catch {
+                print("Failed to check quota: \(error). Proceeding with default strategy.")
+            }
             
-            // End background task when finished
-            if self.backgroundTaskID != .invalid {
-                UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
-                self.backgroundTaskID = .invalid
+            let finalUseGeminiOnly = useGeminiOnly
+            
+            await MainActor.run {
+                self.executeBatchProcessing(assets: assets, useGeminiOnly: finalUseGeminiOnly, retryCount: 0, totalProcessed: 0) { count in
+                    completion(count)
+                    
+                    // End background task when finished
+                    if self.backgroundTaskID != .invalid {
+                        UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
+                        self.backgroundTaskID = .invalid
+                    }
+                }
             }
         }
     }
     
-    private func executeBatchProcessing(assets: [PHAsset], retryCount: Int, totalProcessed: Int, completion: @escaping (Int) -> Void) {
+    private func executeBatchProcessing(assets: [PHAsset], useGeminiOnly: Bool, retryCount: Int, totalProcessed: Int, completion: @escaping (Int) -> Void) {
         let unprocessedAssets = assets.filter { !ImageHashManager.shared.isProcessed(asset: $0) }
         
         guard !unprocessedAssets.isEmpty else {
@@ -142,7 +160,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                         return
                     }
                     
-                    self.slipExtractor.processSlip(image: image) { [weak self] slipData in
+                    self.slipExtractor.processSlip(image: image, useGeminiOnly: useGeminiOnly) { [weak self] slipData in
                         DispatchQueue.main.async {
                             guard let self = self else {
                                 semaphore.signal()
@@ -186,7 +204,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                     print("Remaining unprocessed: \(remainingUnprocessed.count)")
                     
                     DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) {
-                        self.executeBatchProcessing(assets: assets, retryCount: retryCount + 1, totalProcessed: newTotal, completion: completion)
+                        self.executeBatchProcessing(assets: assets, useGeminiOnly: useGeminiOnly, retryCount: retryCount + 1, totalProcessed: newTotal, completion: completion)
                     }
                 } else {
                     self.isProcessing = false
