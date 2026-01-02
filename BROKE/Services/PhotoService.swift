@@ -14,9 +14,15 @@ class PhotoService: ObservableObject {
     @Published var isLoadingComplete = false
 
     private let imageManager = PHCachingImageManager()
-    private let albumNames = ["SCB Easy", "MAKE by KBank", "K PLUS", "Krungthai NEXT", "UOB TMRW"]
+    private let albumNames = ["SCB Easy", "MAKE by KBank", "K PLUS", "Krungthai NEXT", "UOB TMRW", "Bualuang mBanking"]
+
+    private let firstLaunchDateKey = "firstLaunchDate"
 
     init() {
+        // Save first launch date if not present
+        if UserDefaults.standard.object(forKey: firstLaunchDateKey) == nil {
+            UserDefaults.standard.set(Date(), forKey: firstLaunchDateKey)
+        }
         requestPermissionAndFetch()
     }
 
@@ -31,13 +37,14 @@ class PhotoService: ObservableObject {
     func fetchPhotos() {
         var fetchedAssets: [PHAsset] = []
 
-        // Define the cutoff date: Dec 1, 2025
-        var dateComponents = DateComponents()
-        dateComponents.year = 2025
-        dateComponents.month = 11
-        dateComponents.day = 22
+        // Determine cutoff date based on first launch date
+        let launchDate = UserDefaults.standard.object(forKey: firstLaunchDateKey) as? Date ?? Date()
         let calendar = Calendar.current
-        guard let cutoffDate = calendar.date(from: dateComponents) else { return }
+
+        // Get start of the month for the launch date
+        // e.g. if installed 29/12/2025, read from 01/12/2025
+        let components = calendar.dateComponents([.year, .month], from: launchDate)
+        guard let cutoffDate = calendar.date(from: components) else { return }
 
         for albumName in albumNames {
             // 1. Fetch the Album Collection

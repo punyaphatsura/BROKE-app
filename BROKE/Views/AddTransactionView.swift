@@ -76,6 +76,7 @@ struct AddTransactionView: View {
                             Picker("Type", selection: $type) {
                                 Text("Expense").tag(TransactionType.expense)
                                 Text("Income").tag(TransactionType.income)
+                                Text("Transfer").tag(TransactionType.transfer)
                             }
                             .pickerStyle(SegmentedPickerStyle())
 
@@ -119,48 +120,31 @@ struct AddTransactionView: View {
 
                         // MARK: - Category
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Category")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                                Button(action: {
-                                    withAnimation(.spring()) {
-                                        isCategoryExpanded.toggle()
-                                    }
-                                }) {
-                                    Image(systemName: isCategoryExpanded ? "chevron.up" : "chevron.down")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
-                                        .padding(8)
-                                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                                        .clipShape(Circle())
-                                }
-                            }
-                            .padding(.horizontal)
-
-                            if type == .expense {
-                                if isCategoryExpanded {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
-                                        ForEach(ExpenseCategory.allCases) { category in
-                                            categoryButton(
-                                                icon: category.icon,
-                                                color: category.color,
-                                                name: category.displayName,
-                                                isSelected: selectedCategory == category
-                                            ) {
-                                                selectedCategory = category
-                                            }
+                        if type != .transfer {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("Category")
+                                        .font(.headline)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Button(action: {
+                                        withAnimation(.spring()) {
+                                            isCategoryExpanded.toggle()
                                         }
+                                    }) {
+                                        Image(systemName: isCategoryExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                            .padding(8)
+                                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                            .clipShape(Circle())
                                     }
-                                    .padding()
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                    .cornerRadius(20)
-                                    .padding(.horizontal)
-                                } else {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 16) {
+                                }
+                                .padding(.horizontal)
+
+                                if type == .expense {
+                                    if isCategoryExpanded {
+                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
                                             ForEach(ExpenseCategory.allCases) { category in
                                                 categoryButton(
                                                     icon: category.icon,
@@ -173,32 +157,32 @@ struct AddTransactionView: View {
                                             }
                                         }
                                         .padding()
-                                    }
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                    .cornerRadius(20)
-                                    .padding(.horizontal)
-                                }
-                            } else {
-                                if isCategoryExpanded {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
-                                        ForEach(IncomeCategory.allCases) { category in
-                                            categoryButton(
-                                                icon: category.icon,
-                                                color: category.color,
-                                                name: category.displayName,
-                                                isSelected: selectedIncomeCategory == category
-                                            ) {
-                                                selectedIncomeCategory = category
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .cornerRadius(20)
+                                        .padding(.horizontal)
+                                    } else {
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 16) {
+                                                ForEach(ExpenseCategory.allCases) { category in
+                                                    categoryButton(
+                                                        icon: category.icon,
+                                                        color: category.color,
+                                                        name: category.displayName,
+                                                        isSelected: selectedCategory == category
+                                                    ) {
+                                                        selectedCategory = category
+                                                    }
+                                                }
                                             }
+                                            .padding()
                                         }
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .cornerRadius(20)
+                                        .padding(.horizontal)
                                     }
-                                    .padding()
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                    .cornerRadius(20)
-                                    .padding(.horizontal)
                                 } else {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 16) {
+                                    if isCategoryExpanded {
+                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
                                             ForEach(IncomeCategory.allCases) { category in
                                                 categoryButton(
                                                     icon: category.icon,
@@ -211,10 +195,29 @@ struct AddTransactionView: View {
                                             }
                                         }
                                         .padding()
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .cornerRadius(20)
+                                        .padding(.horizontal)
+                                    } else {
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 16) {
+                                                ForEach(IncomeCategory.allCases) { category in
+                                                    categoryButton(
+                                                        icon: category.icon,
+                                                        color: category.color,
+                                                        name: category.displayName,
+                                                        isSelected: selectedIncomeCategory == category
+                                                    ) {
+                                                        selectedIncomeCategory = category
+                                                    }
+                                                }
+                                            }
+                                            .padding()
+                                        }
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .cornerRadius(20)
+                                        .padding(.horizontal)
                                     }
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                    .cornerRadius(20)
-                                    .padding(.horizontal)
                                 }
                             }
                         }
@@ -688,7 +691,7 @@ struct AddTransactionView: View {
 
         if var transaction = transactionToEdit {
             transaction.amount = amountValue
-            transaction.description = description.isEmpty ? (type == .income ? "Income" : "Expense") : description
+            transaction.description = description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description
             transaction.date = date
             transaction.type = type
             transaction.sender = sender.isEmpty ? nil : sender
@@ -704,7 +707,7 @@ struct AddTransactionView: View {
             let transaction = Transaction(
                 refId: refId.isEmpty ? nil : refId,
                 amount: amountValue,
-                description: description.isEmpty ? (type == .income ? "Income" : "Expense") : description,
+                description: description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description,
                 date: date,
                 sender: sender.isEmpty ? nil : sender,
                 receiver: receiver.isEmpty ? nil : receiver,

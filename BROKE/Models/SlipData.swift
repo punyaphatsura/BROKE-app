@@ -16,7 +16,9 @@ struct SlipData {
     let amount: String
     let refId: String
     var imagePath: String? // Added imagePath
-    
+    var categoryHint: String? // Added to pass category from CSV
+    var typeHint: String? // Added to pass type from CSV
+
     init(dictionary: [String: String]) {
         self.bank = dictionary["bank"] ?? "Unknown"
         self.date = dictionary["date"] ?? "-"
@@ -24,6 +26,8 @@ struct SlipData {
         self.receiver = dictionary["receiver"] ?? "-"
         self.amount = dictionary["amount"] ?? "-"
         self.refId = dictionary["refId"] ?? "-"
+        self.categoryHint = dictionary["categoryHint"]
+        self.typeHint = dictionary["typeHint"]
         self.imagePath = nil
     }
     

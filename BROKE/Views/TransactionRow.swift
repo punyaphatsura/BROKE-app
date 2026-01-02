@@ -13,7 +13,7 @@ struct TransactionRow: View {
     @State private var showingEditSheet = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 16) {
             if transaction.type == .expense {
                 if let categoryId = transaction.categoryId,
                    let category = ExpenseCategory(rawValue: categoryId.rawValue)
@@ -36,7 +36,7 @@ struct TransactionRow: View {
                         }
                     }
                 }
-            } else {
+            } else if transaction.type == .income {
                 if let categoryId = transaction.incomeCategoryId,
                    let category = IncomeCategory(rawValue: categoryId.rawValue)
                 {
@@ -58,6 +58,11 @@ struct TransactionRow: View {
                         }
                     }
                 }
+            } else {
+                // Transfer
+                Image(systemName: "arrow.left.arrow.right")
+                    .foregroundColor(.blue)
+                    .font(.title)
             }
             VStack(alignment: .leading) {
                 if transaction.type == .expense {
@@ -66,12 +71,16 @@ struct TransactionRow: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                     }
-                } else {
+                } else if transaction.type == .income {
                     if let category = transaction.incomeCategoryId {
                         Text(category.displayName)
                             .font(.headline)
                             .foregroundColor(.primary)
                     }
+                } else {
+                    Text("Transfer")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                 }
                 Text(transaction.description)
                     .font(.subheadline)
@@ -83,17 +92,13 @@ struct TransactionRow: View {
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
-
-                Text(transaction.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
 
             Spacer()
             VStack(alignment: .trailing) {
                 Text(transaction.amount.formattedCurrency)
                     .font(.headline)
-                    .foregroundColor(transaction.type == .income ? .green : .red)
+                    .foregroundColor(transaction.type == .income ? .green : (transaction.type == .expense ? .red : .primary))
             }
         }
         .padding(.vertical, 4)
@@ -108,6 +113,7 @@ struct TransactionRow: View {
             AddTransactionView(transactionToEdit: transaction)
                 .environmentObject(transactionStore)
         }
+        .contentShape(Rectangle())
         .onTapGesture {
             showingEditSheet = true
         }

@@ -15,6 +15,7 @@
 "category.necessary" = "Necessary";
 "category.accommodation" = "Accommodation";
 "category.tax" = "Tax";
+"category.family" = "Family/Pets";
 
 /* Scan */
 "scan.title" = "Scan Slip";

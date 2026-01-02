@@ -11,6 +11,7 @@ import SwiftUI
 enum TransactionType: String, Codable {
     case income
     case expense
+    case transfer
 }
 
 enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
@@ -28,6 +29,7 @@ enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
     case travel = "12"
     case insurance = "13"
     case bills = "14"
+    case family = "15"
     case others = "-1"
 
     static func from(string: String) -> ExpenseCategory {
@@ -55,6 +57,7 @@ enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
         case .necessary: return NSLocalizedString("category.necessary", comment: "Necessary")
         case .tax: return NSLocalizedString("category.tax", comment: "Tax")
         case .insurance: return NSLocalizedString("category.insurance", comment: "Insurance")
+        case .family: return NSLocalizedString("category.family", comment: "Family & Pets")
         case .others: return NSLocalizedString("category.others", comment: "Others")
         default: return NSLocalizedString("category.others", comment: "Others")
         }
@@ -76,6 +79,7 @@ enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
         case .necessary: return "checklist"
         case .tax: return "banknote.fill"
         case .insurance: return "shield.fill"
+        case .family: return "pawprint.fill"
         case .others: return "circle.grid.2x2.fill"
         default: return "circle.grid.2x2.fill"
         }
@@ -97,6 +101,7 @@ enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
         case .necessary: return .cyan
         case .tax: return .gray
         case .insurance: return .teal
+        case .family: return .orange
         case .others: return .gray
         default: return .gray
         }

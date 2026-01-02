@@ -29,12 +29,21 @@ struct HomeView: View {
         newSlipsCount - unprocessedCount
     }
 
+    var groupedTransactions: [(key: Date, value: [Transaction])] {
+        let grouped = Dictionary(grouping: transactionStore.transactions) { transaction in
+            Calendar.current.startOfDay(for: transaction.date)
+        }
+        return grouped.sorted { $0.key > $1.key }
+    }
+
     var body: some View {
         NavigationView {
             VStack {
                 lastBatchScannedView
 
                 monthNavigation
+
+                summaryView
 
                 transactionList
 
@@ -43,7 +52,6 @@ struct HomeView: View {
             .toolbar {
                 toolbarContent
             }
-            .navigationTitle("BROKE")
             .sheet(isPresented: $viewModel.showingAddTransaction) {
                 AddTransactionView() // Manual add
             }
@@ -152,14 +160,47 @@ struct HomeView: View {
         .padding(.horizontal)
     }
 
+    private var summaryView: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .center) {
+                Text("Income")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(transactionStore.totalIncome().formattedCurrency)
+                    .font(.headline)
+                    .foregroundColor(.green)
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(alignment: .center) {
+                Text("Expense")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(transactionStore.totalExpense().formattedCurrency)
+                    .font(.headline)
+                    .foregroundColor(.red)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 12)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+        .padding(.horizontal)
+        .padding(.bottom, 4)
+    }
+
     private var transactionList: some View {
         VStack(alignment: .leading) {
             List {
-                ForEach(Array(transactionStore.transactions)) { transaction in
-                    TransactionRow(transaction: transaction)
+                ForEach(groupedTransactions, id: \.key) { section in
+                    Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
+                        ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
+                            TransactionRow(transaction: transaction)
+                        }
+                    }
                 }
             }
-            .listStyle(PlainListStyle())
+            .listStyle(InsetGroupedListStyle())
             .refreshable {
                 await refreshData()
             }
@@ -306,6 +347,10 @@ struct TransactionThumbnailView: View {
                     Image(systemName: incomeCategory.icon)
                         .font(.system(size: 24))
                         .foregroundColor(incomeCategory.color)
+                } else if transaction.type == .transfer {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 24))
+                        .foregroundColor(.blue)
                 } else {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 24))
