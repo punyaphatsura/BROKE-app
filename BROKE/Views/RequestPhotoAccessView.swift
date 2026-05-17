@@ -28,7 +28,6 @@ struct RequestPhotoAccessView: View {
                 .padding()
             
             Button(action: {
-                print("[DEBUG] Allow Access button tapped")
                 requestPhotoLibraryAccess()
             }) {
                 Text(accessStatus == .authorized ? "Access Granted" : "Allow Access")
@@ -42,7 +41,6 @@ struct RequestPhotoAccessView: View {
             .padding(.horizontal)
             
             Button("Close") {
-                print("[DEBUG] Close button tapped")
                 dismiss()
             }
             .padding()
@@ -50,33 +48,23 @@ struct RequestPhotoAccessView: View {
         .padding()
         .background(theme.background.ignoresSafeArea())
         .onAppear {
-            print("[DEBUG] View appeared — checking photo access status")
             checkPhotoLibraryAccess()
         }
     }
     
     private func checkPhotoLibraryAccess() {
         let currentStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        print("[DEBUG] Current access status: \(currentStatus.rawValue)")
         accessStatus = currentStatus
     }
     
     private func requestPhotoLibraryAccess() {
         if accessStatus == .authorized {
-            print("[DEBUG] Access is already granted — nothing to do")
             return
         }
-        print("[DEBUG] Requesting photo access...")
 
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            print("[DEBUG] Photo access status received: \(status.rawValue)")
             DispatchQueue.main.async {
                 self.accessStatus = status
-                if status == .authorized {
-                    print("[DEBUG] Access granted ✅")
-                } else {
-                    print("[DEBUG] Access denied or limited ❌")
-                }
             }
         }
     }

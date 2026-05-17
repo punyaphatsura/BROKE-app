@@ -103,49 +103,45 @@ struct TransactionSectionHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .center, spacing: 0) {
                 Text(date, format: .dateTime.weekday(.abbreviated))
-                    .font(.caption)
-                    .fontWeight(.bold)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.5)
                     .textCase(.uppercase)
-
+                    .foregroundColor(theme.textSecondary)
                 Text(date, format: .dateTime.day())
-                    .font(.title3)
-                    .fontWeight(.bold)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
             }
-            .foregroundColor(theme.textPrimary)
-            .frame(width: 50)
+            .frame(width: 44)
 
             Spacer()
 
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 14) {
                 if income > 0 {
-                    HStack {
-                        Spacer()
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.down.left")
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.income)
                         Text(income.formattedCurrency)
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.income)
                     }
-                    .frame(maxWidth: .infinity)
                 }
-
                 if expense > 0 {
-                    HStack {
-                        Spacer()
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.expense)
                         Text(expense.formattedCurrency)
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.expense)
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(minWidth: 120)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
     }
 }
