@@ -19,6 +19,7 @@ struct HomeView: View {
     @State private var newSlipsCount: Int = 0
     @State private var showingQuotaAlert = false
     @State private var isLastBatchExpanded: Bool = false
+    @EnvironmentObject var theme: ThemeManager
 
     // Computed properties for counts
     var unprocessedCount: Int {
@@ -165,25 +166,25 @@ struct HomeView: View {
             VStack(alignment: .center) {
                 Text("Income")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondary)
                 Text(transactionStore.totalIncome().formattedCurrency)
                     .font(.headline)
-                    .foregroundColor(.green)
+                    .foregroundColor(theme.income)
             }
             .frame(maxWidth: .infinity)
 
             VStack(alignment: .center) {
                 Text("Expense")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondary)
                 Text(transactionStore.totalExpense().formattedCurrency)
                     .font(.headline)
-                    .foregroundColor(.red)
+                    .foregroundColor(theme.expense)
             }
             .frame(maxWidth: .infinity)
         }
         .padding(.vertical, 12)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(theme.cardBackground)
         .cornerRadius(12)
         .padding(.horizontal)
         .padding(.bottom, 4)
@@ -242,7 +243,7 @@ struct HomeView: View {
             .foregroundColor(.white)
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
-            .background(Color.blue)
+            .background(theme.primary)
             .cornerRadius(15)
         }
     }
@@ -310,20 +311,20 @@ struct HomeView: View {
 
 struct TransactionThumbnailView: View {
     let transaction: Transaction
+    @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Top row: Bank Icon and Amount
             HStack {
                 if let bank = transaction.bank, let iconName = bank.iconName {
-                    Image(iconName) // Assuming you have assets for bank icons
+                    Image(iconName)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)
                         .cornerRadius(4)
                 } else {
                     Image(systemName: "building.columns.fill")
-                        .foregroundColor(.gray)
+                        .foregroundColor(theme.textSecondary)
                         .frame(width: 24, height: 24)
                 }
 
@@ -331,12 +332,11 @@ struct TransactionThumbnailView: View {
 
                 Text(transaction.amount.formattedCurrency)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(theme.textPrimary)
             }
 
             Spacer()
 
-            // Middle: Category Icon
             HStack {
                 Spacer()
                 if let category = transaction.categoryId {
@@ -350,26 +350,25 @@ struct TransactionThumbnailView: View {
                 } else if transaction.type == .transfer {
                     Image(systemName: "arrow.left.arrow.right")
                         .font(.system(size: 24))
-                        .foregroundColor(.blue)
+                        .foregroundColor(theme.primary)
                 } else {
                     Image(systemName: "questionmark.circle")
                         .font(.system(size: 24))
-                        .foregroundColor(.gray)
+                        .foregroundColor(theme.textSecondary)
                 }
                 Spacer()
             }
 
             Spacer()
 
-            // Bottom: Date
             Text(transaction.date, style: .date)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
         }
         .padding(8)
         .frame(width: 120, height: 100)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(theme.cardBackground)
         .cornerRadius(10)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
