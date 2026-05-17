@@ -2,8 +2,6 @@
 //  HomeView.swift
 //  BROKE
 //
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
 
 import Photos
 import PhotosUI
@@ -12,251 +10,189 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var transactionStore: TransactionStore
     @EnvironmentObject var photoService: PhotoService
+    @EnvironmentObject var theme: ThemeManager
     @StateObject private var scannerViewModel = SlipScannerViewModel()
     @StateObject private var viewModel = HomeViewModel()
     @Environment(\.scenePhase) var scenePhase
 
     @State private var newSlipsCount: Int = 0
     @State private var showingQuotaAlert = false
-    @State private var isLastBatchExpanded: Bool = false
-    @EnvironmentObject var theme: ThemeManager
+    @State private var showingAddTransaction = false
+    @State private var selectedTransactionForReview: Transaction?
 
-    // Computed properties for counts
     var unprocessedCount: Int {
         photoService.assets.filter { !ImageHashManager.shared.isProcessed(asset: $0) }.count
     }
 
-    var processedCount: Int {
-        newSlipsCount - unprocessedCount
-    }
-
     var groupedTransactions: [(key: Date, value: [Transaction])] {
-        let grouped = Dictionary(grouping: transactionStore.transactions) { transaction in
-            Calendar.current.startOfDay(for: transaction.date)
+        let grouped = Dictionary(grouping: transactionStore.transactions) { t in
+            Calendar.current.startOfDay(for: t.date)
         }
         return grouped.sorted { $0.key > $1.key }
     }
 
+    var netBalance: Double {
+        transactionStore.totalIncome() - transactionStore.totalExpense()
+    }
+
     var body: some View {
-        NavigationView {
-            VStack {
-                lastBatchScannedView
+        ScrollView {
+            VStack(spacing: 0) {
+                homeHeader
+                    .padding(.top, 56)
+                    .padding(.bottom, 18)
 
-                monthNavigation
+                BalanceCard(
+                    netAmount: netBalance,
+                    incomeAmount: transactionStore.totalIncome(),
+                    expenseAmount: transactionStore.totalExpense()
+                )
+                .padding(.bottom, 14)
 
-                summaryView
-
-                transactionList
-
-                Spacer()
-            }
-            .toolbar {
-                toolbarContent
-            }
-            .sheet(isPresented: $viewModel.showingAddTransaction) {
-                AddTransactionView() // Manual add
-            }
-            .sheet(item: $viewModel.selectedTransactionForReview) { transaction in
-                AddTransactionView(transactionToEdit: transaction)
-            }
-            .alert("Limit Exceeded", isPresented: $showingQuotaAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("The daily limit for Gemini API has been reached. Please try again later.")
-            }
-            .onReceive(photoService.$isLoadingComplete) { isComplete in
-                if isComplete {
-                    triggerBatchScan()
+                if unprocessedCount > 0 || !viewModel.recentScannedTransactions.isEmpty {
+                    SlipBanner(
+                        slipCount: max(unprocessedCount, viewModel.recentScannedTransactions.count),
+                        onReview: { triggerBatchScan() }
+                    )
+                    .padding(.bottom, 14)
                 }
-            }
-            .onReceive(scannerViewModel.$processedSlipData) { slipData in
-                if let slipData = slipData {
-                    saveTransactionFromSlip(slipData)
-                }
-            }
-            .onReceive(scannerViewModel.$errorMessage) { error in
-                // Check for quota error in message if it bubbles up here,
-                // but ideally we check the flag from VM if exposed or just string match
-                if let error = error, error.contains("quota") || error.contains("429") || error.contains("RESOURCE_EXHAUSTED") {
-                    showingQuotaAlert = true
-                } else if let error = error, !error.isEmpty {
-                    // Show other errors if needed, or handle them elsewhere
-                    print("Scanner Error: \(error)")
-                }
-            }
-            .onAppear {
-                updateTransactionsList()
-                if newSlipsCount == 0 && unprocessedCount > 0 {
-                    self.newSlipsCount = unprocessedCount
-                }
-            }
-            .onChange(of: viewModel.currentMonth) { _ in updateTransactionsList() }
-            .onChange(of: viewModel.currentYear) { _ in updateTransactionsList() }
-        }
-    }
 
-    // MARK: - Subviews
+                monthNav
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
 
-    private var lastBatchScannedView: some View {
-        Group {
-            if !viewModel.recentScannedTransactions.isEmpty {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Button(action: {
-                            withAnimation {
-                                isLastBatchExpanded.toggle()
-                            }
-                        }) {
-                            HStack {
-                                Text("Last Scanned Batch (\(viewModel.recentScannedTransactions.count)/\(newSlipsCount))")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                Image(systemName: isLastBatchExpanded ? "chevron.down" : "chevron.right")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        Spacer()
-                        statisticsSection
-                    }
-
-                    if isLastBatchExpanded {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(viewModel.recentScannedTransactions) { transaction in
-                                    TransactionThumbnailView(transaction: transaction)
-                                        .onTapGesture {
-                                            viewModel.selectedTransactionForReview = transaction
-                                        }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
+                ForEach(groupedTransactions, id: \.key) { section in
+                    transactionGroup(date: section.key, transactions: section.value)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
                 }
-                .padding(.vertical, 10)
+
+                Spacer(minLength: 20)
             }
         }
+        .background(theme.bg.ignoresSafeArea())
+        .sheet(isPresented: $showingAddTransaction) {
+            AddTransactionView()
+        }
+        .sheet(item: $selectedTransactionForReview) { transaction in
+            AddTransactionView(transactionToEdit: transaction)
+        }
+        .alert("Limit Exceeded", isPresented: $showingQuotaAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The daily Gemini API quota has been reached. Please try again later.")
+        }
+        .onReceive(photoService.$isLoadingComplete) { complete in
+            if complete { triggerBatchScan() }
+        }
+        .onReceive(scannerViewModel.$processedSlipData) { slipData in
+            if let slipData { saveTransactionFromSlip(slipData) }
+        }
+        .onReceive(scannerViewModel.$errorMessage) { error in
+            if let error, (error.contains("quota") || error.contains("429") || error.contains("RESOURCE_EXHAUSTED")) {
+                showingQuotaAlert = true
+            }
+        }
+        .onAppear { updateTransactionsList() }
+        .onChange(of: viewModel.currentMonth) { _ in updateTransactionsList() }
+        .onChange(of: viewModel.currentYear)  { _ in updateTransactionsList() }
     }
 
-    private var monthNavigation: some View {
+    // MARK: - Header
+
+    private var homeHeader: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.softBrand)
+                    .frame(width: 44, height: 44)
+                MascotView(size: 28)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Hi, there.")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.ink)
+                Text(viewModel.monthYearString)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(theme.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: { showingAddTransaction = true }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(theme.brand)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(theme.brandInk)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    // MARK: - Month navigation
+
+    private var monthNav: some View {
         HStack {
             Button(action: viewModel.previousMonth) {
                 Image(systemName: "chevron.left")
-                    .padding()
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.muted)
+                    .frame(width: 32, height: 32)
             }
-
+            Spacer()
             Text(viewModel.monthYearString)
-                .font(.title2)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity)
-
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(theme.ink)
+            Spacer()
             Button(action: viewModel.nextMonth) {
                 Image(systemName: "chevron.right")
-                    .padding()
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(viewModel.isCurrentMonthAndYear ? theme.muted.opacity(0.3) : theme.muted)
+                    .frame(width: 32, height: 32)
             }
             .disabled(viewModel.isCurrentMonthAndYear)
         }
-        .padding(.horizontal)
     }
 
-    private var summaryView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .center) {
-                Text("Income")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                Text(transactionStore.totalIncome().formattedCurrency)
-                    .font(.headline)
-                    .foregroundColor(theme.income)
-            }
-            .frame(maxWidth: .infinity)
+    // MARK: - Transaction group card
 
-            VStack(alignment: .center) {
-                Text("Expense")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                Text(transactionStore.totalExpense().formattedCurrency)
-                    .font(.headline)
-                    .foregroundColor(theme.expense)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 12)
-        .background(theme.cardBackground)
-        .cornerRadius(12)
-        .padding(.horizontal)
-        .padding(.bottom, 4)
-    }
-
-    private var transactionList: some View {
-        VStack(alignment: .leading) {
-            List {
-                ForEach(groupedTransactions, id: \.key) { section in
-                    Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
-                        ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
-                            TransactionRow(transaction: transaction)
-                        }
-                    }
-                }
-            }
-            .listStyle(InsetGroupedListStyle())
-            .refreshable {
-                await refreshData()
-            }
-        }
-    }
-
-    private var statisticsSection: some View {
-        Group {
-            if !photoService.assets.isEmpty {
-                HStack(spacing: 12) {
-                    if scannerViewModel.isProcessing {
-                        processingIndicator
-                    } else if unprocessedCount > 0 {
-                        scanButton
-                    }
-                }
-                .padding(.trailing, 16)
-            }
-        }
-    }
-
-    private var processingIndicator: some View {
-        HStack {
-            ProgressView()
-                .padding(.trailing, 5)
-        }
-        .padding(.vertical, 5)
-    }
-
-    private var scanButton: some View {
-        Button(action: {
-            triggerBatchScan()
-        }) {
+    private func transactionGroup(date: Date, transactions: [Transaction]) -> some View {
+        VStack(spacing: 0) {
             HStack {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                Text("Scan Remaining (\(unprocessedCount))")
-            }
-            .font(.caption.weight(.medium))
-            .foregroundColor(.white)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .background(theme.primary)
-            .cornerRadius(15)
-        }
-    }
-
-    private var toolbarContent: some ToolbarContent {
-        Group {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    viewModel.showingAddTransaction = true
-                }) {
-                    Image(systemName: "plus")
+                Text(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.ink)
+                Spacer()
+                let daily = transactions.filter { $0.type == .expense }.reduce(0.0) { $0 + $1.amount }
+                if daily > 0 {
+                    Text("-฿\(Int(daily).formattedWithSeparator)")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.muted)
                 }
             }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 8)
+
+            VStack(spacing: 0) {
+                let sorted = transactions.sorted(by: { $0.date > $1.date })
+                ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, transaction in
+                    TransactionRow(transaction: transaction)
+                        .onTapGesture { selectedTransactionForReview = transaction }
+                    if idx < sorted.count - 1 {
+                        Divider()
+                            .padding(.leading, 68)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(theme.surface)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+            )
         }
     }
 
@@ -270,106 +206,19 @@ struct HomeView: View {
         viewModel.saveTransactionFromSlip(slipData, into: transactionStore) { data in
             scannerViewModel.suggestCategory(for: data)
         }
-
-        // Refresh list if added transaction belongs to current view
-        let calendar = Calendar.current
-        let transMonth = calendar.component(.month, from: slipData.parsedDate ?? Date())
-        let transYear = calendar.component(.year, from: slipData.parsedDate ?? Date())
-
-        if transMonth == viewModel.currentMonth, transYear == viewModel.currentYear {
+        let cal = Calendar.current
+        let tm = cal.component(.month, from: slipData.parsedDate ?? Date())
+        let ty = cal.component(.year, from: slipData.parsedDate ?? Date())
+        if tm == viewModel.currentMonth, ty == viewModel.currentYear {
             updateTransactionsList()
         }
-
-        // Optional: Provide feedback (haptic or toast)
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func triggerBatchScan() {
-        print("Starting batch scan...")
-        // Only reset if we are starting a fresh batch
         if unprocessedCount > 0 {
-            // Set the fixed count for this batch
             newSlipsCount = viewModel.recentScannedTransactions.count + unprocessedCount
         }
-        scannerViewModel.processBatch(assets: photoService.assets) { count in
-            print("Batch processed: \(count) assets")
-        }
-    }
-
-    private func refreshData() async {
-        photoService.fetchPhotos()
-
-        try? await Task.sleep(nanoseconds: 1 * 1_000_000_000)
-
-        await MainActor.run {
-            triggerBatchScan()
-            updateTransactionsList()
-        }
-    }
-}
-
-struct TransactionThumbnailView: View {
-    let transaction: Transaction
-    @EnvironmentObject var theme: ThemeManager
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                if let bank = transaction.bank, let iconName = bank.iconName {
-                    Image(iconName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
-                        .cornerRadius(4)
-                } else {
-                    Image(systemName: "building.columns.fill")
-                        .foregroundColor(theme.textSecondary)
-                        .frame(width: 24, height: 24)
-                }
-
-                Spacer()
-
-                Text(transaction.amount.formattedCurrency)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
-            }
-
-            Spacer()
-
-            HStack {
-                Spacer()
-                if let category = transaction.categoryId {
-                    Image(systemName: category.icon)
-                        .font(.system(size: 24))
-                        .foregroundColor(category.color)
-                } else if let incomeCategory = transaction.incomeCategoryId {
-                    Image(systemName: incomeCategory.icon)
-                        .font(.system(size: 24))
-                        .foregroundColor(incomeCategory.color)
-                } else if transaction.type == .transfer {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 24))
-                        .foregroundColor(theme.primary)
-                } else {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 24))
-                        .foregroundColor(theme.textSecondary)
-                }
-                Spacer()
-            }
-
-            Spacer()
-
-            Text(transaction.date, style: .date)
-                .font(.caption2)
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(1)
-        }
-        .padding(8)
-        .frame(width: 120, height: 100)
-        .background(theme.cardBackground)
-        .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        scannerViewModel.processBatch(assets: photoService.assets) { _ in }
     }
 }
