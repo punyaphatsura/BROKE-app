@@ -101,3 +101,9 @@ GoogleService-Info.plist
 
 # Secrets
 BROKE/Utils/Secrets.swift
+.worktrees/
+
+# Design files & tool output
+Broke Redesign - standalone.html
+repomix-output.xml
+.superpowers/
