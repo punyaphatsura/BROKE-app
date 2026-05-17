@@ -182,10 +182,12 @@ struct SettingsView: View {
 
     private func mascotCard(_ char: ThemeCharacter, label: String) -> some View {
         let active = theme.character == char
+        // Brand color for the preview: use actual theme.brand for active, a neutral for inactive
+        let previewBrand: Color = char == .penguin ? Color(hex: "3D9BF0") : Color(hex: "F5BC1A")
         return Button { theme.character = char } label: {
             VStack(spacing: 10) {
-                MascotView(size: 64)
-                    .environmentObject(previewTheme(for: char))
+                // Simple mascot preview using a ZStack without needing a separate ThemeManager
+                mascotPreview(for: char, brand: previewBrand)
                 Text(label)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(active ? theme.brand : theme.muted)
@@ -204,11 +206,16 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private func previewTheme(for char: ThemeCharacter) -> ThemeManager {
-        let t = ThemeManager()
-        t.character = char
-        t.appearance = theme.appearance
-        return t
+    private func mascotPreview(for char: ThemeCharacter, brand: Color) -> some View {
+        // Draw a simple branded circle with an SF Symbol — avoids env object injection
+        ZStack {
+            Circle()
+                .fill(brand.opacity(0.15))
+                .frame(width: 64, height: 64)
+            Image(systemName: char == .penguin ? "snowflake" : "flame")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundColor(brand)
+        }
     }
 
     // MARK: - Helpers

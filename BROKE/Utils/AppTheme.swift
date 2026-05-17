@@ -14,12 +14,8 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 class ThemeManager: ObservableObject {
-    @AppStorage("themeCharacter") var character: ThemeCharacter = .penguin {
-        willSet { objectWillChange.send() }
-    }
-    @AppStorage("appearanceMode") var appearance: AppearanceMode = .light {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("themeCharacter") var character: ThemeCharacter = .penguin
+    @AppStorage("appearanceMode") var appearance: AppearanceMode = .light
 
     var preferredColorScheme: ColorScheme? {
         switch appearance {
