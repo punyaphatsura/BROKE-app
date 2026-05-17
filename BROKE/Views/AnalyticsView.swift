@@ -220,7 +220,7 @@ struct SummaryStatsBoard: View {
                     .foregroundColor(theme.textSecondary)
                     Text(stats.expense.formattedCurrency)
                         .font(.headline)
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundColor(theme.expense)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -272,9 +272,10 @@ struct CategoryBreakdownChart: View {
     let contextMonth: Date
     let contextType: TransactionType
     let totalAmount: Double
-    
+
     @State private var lastSelectedCategory: ExpenseCategory?
     @State private var navigateToCategoryKey: String? // Trick for programmatic nav
+    @EnvironmentObject var theme: ThemeManager
     
     // Helper to find filtered transactions for navigation
     private func transactionsFor(_ category: ExpenseCategory) -> [Transaction] {
@@ -340,26 +341,26 @@ struct CategoryBreakdownChart: View {
                         if let cat = lastSelectedCategory, let item = chartData.first(where: { $0.category == cat }) {
                             Text(cat.displayName)
                                 .font(.headline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(theme.textSecondary)
                             Text(item.amount.formattedCurrency)
                                 .font(.title2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.primary)
+                                .foregroundColor(theme.textPrimary)
                             Text("\(Int((item.amount / totalAmount) * 100))%")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
-                            Image(systemName: "chevron.right.circle.fill") // Hint to tap
+                                .foregroundColor(theme.textSecondary)
+                            Image(systemName: "chevron.right.circle.fill")
                                 .font(.caption)
-                                .foregroundColor(.blue.opacity(0.8))
+                                .foregroundColor(theme.accent.opacity(0.8))
                                 .padding(.top, 2)
                         } else {
                             Text("Total")
                                 .font(.headline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(theme.textSecondary)
                             Text(totalAmount.formattedCurrency)
                                 .font(.title2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.primary)
+                                .foregroundColor(theme.textPrimary)
                         }
                     }
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)

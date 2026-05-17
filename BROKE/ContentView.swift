@@ -42,5 +42,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(TransactionStore())
+        .environmentObject(PhotoService())
         .environmentObject(ThemeManager())
 }
