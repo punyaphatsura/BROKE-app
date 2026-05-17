@@ -784,10 +784,3 @@ fileprivate func flattenTransactions(_ transactions: [Transaction]) -> [Transact
     return result
 }
 
-extension Int {
-    var formattedWithSeparator: String {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        return f.string(from: NSNumber(value: self)) ?? "\(self)"
-    }
-}

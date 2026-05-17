@@ -16,6 +16,14 @@ extension Double {
     }
 }
 
+extension Int {
+    var formattedWithSeparator: String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f.string(from: NSNumber(value: self)) ?? "\(self)"
+    }
+}
+
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
