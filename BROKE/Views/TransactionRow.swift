@@ -9,109 +9,93 @@ struct TransactionRow: View {
     @EnvironmentObject var transactionStore: TransactionStore
     @EnvironmentObject var theme: ThemeManager
     let transaction: Transaction
-    @State private var showingEditSheet = false
+
+    private var categoryColor: Color {
+        if let cat = transaction.categoryId { return cat.color }
+        if let cat = transaction.incomeCategoryId { return cat.color }
+        return theme.muted
+    }
+
+    private var categoryIcon: String {
+        if let cat = transaction.categoryId { return cat.icon }
+        if let cat = transaction.incomeCategoryId { return cat.icon }
+        return transaction.type == .transfer ? "arrow.left.arrow.right" : "questionmark"
+    }
+
+    private var displayName: String {
+        if let cat = transaction.categoryId { return cat.displayName }
+        if let cat = transaction.incomeCategoryId { return cat.displayName }
+        return transaction.type == .transfer ? "Transfer" : "Unknown"
+    }
+
+    private var amountColor: Color {
+        switch transaction.type {
+        case .income:   return theme.income
+        case .expense:  return theme.expense
+        case .transfer: return theme.ink
+        }
+    }
+
+    private var amountPrefix: String {
+        switch transaction.type {
+        case .income:   return "+"
+        case .expense:  return "−"
+        case .transfer: return ""
+        }
+    }
 
     var body: some View {
-        HStack(spacing: 16) {
-            if transaction.type == .expense {
-                if let categoryId = transaction.categoryId,
-                   let category = ExpenseCategory(rawValue: categoryId.rawValue) {
-                    Menu {
-                        ForEach(ExpenseCategory.allCases) { cat in
-                            Button(action: {
-                                var newTransaction = transaction
-                                newTransaction.categoryId = cat
-                                transactionStore.updateTransaction(newTransaction)
-                            }) {
-                                Label(cat.displayName, systemImage: cat.icon)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: category.icon)
-                            .foregroundColor(category.color)
-                            .font(.title)
-                    }
-                }
-            } else if transaction.type == .income {
-                if let categoryId = transaction.incomeCategoryId,
-                   let category = IncomeCategory(rawValue: categoryId.rawValue) {
-                    Menu {
-                        ForEach(IncomeCategory.allCases) { cat in
-                            Button(action: {
-                                var newTransaction = transaction
-                                newTransaction.incomeCategoryId = cat
-                                transactionStore.updateTransaction(newTransaction)
-                            }) {
-                                Label(cat.displayName, systemImage: cat.icon)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: category.icon)
-                            .foregroundColor(category.color)
-                            .font(.title)
-                    }
-                }
-            } else {
-                Image(systemName: "arrow.left.arrow.right")
-                    .foregroundColor(theme.primary)
-                    .font(.title)
+        HStack(spacing: 12) {
+            // Category icon tile
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(categoryColor.opacity(0.14))
+                    .frame(width: 40, height: 40)
+                Image(systemName: categoryIcon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(categoryColor)
             }
 
-            VStack(alignment: .leading) {
-                if transaction.type == .expense {
-                    if let category = transaction.categoryId {
-                        Text(category.displayName)
-                            .font(.headline)
-                            .foregroundColor(theme.textPrimary)
-                    }
-                } else if transaction.type == .income {
-                    if let category = transaction.incomeCategoryId {
-                        Text(category.displayName)
-                            .font(.headline)
-                            .foregroundColor(theme.textPrimary)
-                    }
-                } else {
-                    Text("Transfer")
-                        .font(.headline)
-                        .foregroundColor(theme.textPrimary)
-                }
-                Text(transaction.description)
-                    .font(.subheadline)
-                    .foregroundColor(theme.textSecondary)
+            // Name + meta
+            VStack(alignment: .leading, spacing: 3) {
+                Text(displayName)
+                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.ink)
+                    .lineLimit(1)
 
-                if let subTransactions = transaction.subTransactions, !subTransactions.isEmpty {
-                    Text(subTransactions.map { $0.categoryId.displayName }.joined(separator: ", "))
-                        .font(.caption2)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
+                HStack(spacing: 6) {
+                    if !transaction.description.isEmpty {
+                        Text(transaction.description)
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.muted)
+                            .lineLimit(1)
+                    }
+                    if let bank = transaction.bank, bank != .unknown {
+                        Text(bank.rawValue)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(theme.ink)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(theme.softBrand))
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            Text(transaction.amount.formattedCurrency)
-                .font(.headline)
-                .foregroundColor(
-                    transaction.type == .income ? theme.income :
-                    transaction.type == .expense ? theme.expense :
-                    theme.textPrimary
-                )
+            // Amount
+            Text("\(amountPrefix)฿\(transaction.amount.formattedCurrency)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(amountColor)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 transactionStore.deleteTransactionById(transaction.id)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-        }
-        .sheet(isPresented: $showingEditSheet) {
-            AddTransactionView(transactionToEdit: transaction)
-                .environmentObject(transactionStore)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            showingEditSheet = true
         }
     }
 }
