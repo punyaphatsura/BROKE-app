@@ -31,14 +31,14 @@ struct AddTransactionView: View {
     @State private var isShowSlip: Bool = false
     @State private var showZoom: Bool = false // <- swap to zoom view AFTER the matched-geometry animation
     @State private var draftSubTransactions: [DraftSubTransaction] = [DraftSubTransaction()]
-    
+
     // Draft struct to handle text input
     struct DraftSubTransaction: Identifiable {
         let id = UUID()
         var amount: String = ""
         var category: ExpenseCategory = .others
     }
-    
+
     // For custom date picker
     @State private var showDatePicker: Bool = false
 
@@ -60,28 +60,307 @@ struct AddTransactionView: View {
         case subAmount(UUID) // Focus per row
     }
 
-    // ... (init)
+    init(slipData: SlipData? = nil, transactionToEdit: Transaction? = nil) {
+        self.slipData = slipData
+        self.transactionToEdit = transactionToEdit
+    }
 
-    // ... (body) -> subTransactionsSection update
+    var body: some View {
+        ZStack {
+            theme.bg.ignoresSafeArea()
+
+            NavigationView {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        typePicker
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+
+                        heroAmount
+                            .padding(.horizontal, 20)
+
+                        if type != .transfer {
+                            categoryGrid
+                                .padding(.horizontal, 20)
+                        }
+
+                        noteField
+                            .padding(.horizontal, 20)
+
+                        if type == .expense {
+                            subTransactionsSection
+                                .padding(.horizontal, 4)
+                        }
+
+                        if loadedImage != nil || transactionToEdit?.imagePath != nil {
+                            slipImageSection
+                                .padding(.horizontal, 20)
+                        }
+
+                        moreDetailsSection
+                            .padding(.horizontal, 20)
+
+                        Spacer(minLength: 40)
+                    }
+                }
+                .background(theme.bg)
+                .navigationTitle(transactionToEdit == nil ? "New Entry" : "Edit Entry")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") { dismiss() }
+                            .foregroundColor(theme.muted)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(action: saveTransaction) {
+                            Text(transactionToEdit == nil ? "Save" : "Update")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(theme.brandInk)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(amount.isEmpty ? theme.muted : theme.brand))
+                        }
+                        .disabled(amount.isEmpty)
+                    }
+                    ToolbarItem(placement: .keyboard) {
+                        HStack { Spacer(); Button("Done") { focusedField = nil } }
+                    }
+                }
+            }
+            .onAppear {
+                if let transaction = transactionToEdit {
+                    populateFromTransaction(transaction)
+                    loadImage(from: transaction.imagePath)
+                } else {
+                    populateFromSlipData()
+                }
+            }
+            .sheet(isPresented: $showDatePicker) {
+                DatePicker("Select Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                    .padding()
+            }
+
+            if isShowSlip {
+                fullScreenSlipOverlay
+                    .transition(.opacity)
+                    .zIndex(999)
+            }
+        }
+    }
+
+    // MARK: - New visual helpers
+
+    private var typePicker: some View {
+        HStack(spacing: 0) {
+            typeBtn("Expense",  tag: .expense)
+            typeBtn("Income",   tag: .income)
+            typeBtn("Transfer", tag: .transfer)
+        }
+        .padding(4)
+        .background(
+            Capsule()
+                .fill(theme.surface)
+                .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 1)
+        )
+    }
+
+    private func typeBtn(_ title: String, tag: TransactionType) -> some View {
+        Button { type = tag } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity)
+                .background(Capsule().fill(type == tag ? theme.brand : Color.clear))
+                .foregroundColor(type == tag ? theme.brandInk : theme.muted)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var heroAmount: some View {
+        VStack(spacing: 10) {
+            Text("AMOUNT · THB")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .tracking(1)
+                .foregroundColor(theme.muted)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("฿")
+                    .font(.system(size: 40, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.brand)
+                TextField("0", text: $amount)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 92, weight: .semibold, design: .rounded))
+                    .minimumScaleFactor(0.3)
+                    .multilineTextAlignment(.center)
+                    .focused($focusedField, equals: .amount)
+                    .foregroundColor(theme.ink)
+            }
+
+            Button(action: { showDatePicker = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13))
+                    Text(dateFormatted)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                }
+                .foregroundColor(theme.ink)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(theme.surface))
+            }
+        }
+    }
+
+    private var categoryGrid: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Category")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(theme.muted)
+
+            if type == .expense {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                    ForEach(ExpenseCategory.allCases) { cat in
+                        expenseCatCell(cat)
+                    }
+                }
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                    ForEach(IncomeCategory.allCases) { cat in
+                        incomeCatCell(cat)
+                    }
+                }
+            }
+        }
+    }
+
+    private func expenseCatCell(_ cat: ExpenseCategory) -> some View {
+        let active = selectedCategory == cat
+        return Button { selectedCategory = cat } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(active ? cat.color : cat.color.opacity(0.14))
+                        .frame(height: 52)
+                    Image(systemName: cat.icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(active ? .white : cat.color)
+                }
+                Text(cat.displayName)
+                    .font(.system(size: 10))
+                    .foregroundColor(active ? theme.ink : theme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func incomeCatCell(_ cat: IncomeCategory) -> some View {
+        let active = selectedIncomeCategory == cat
+        return Button { selectedIncomeCategory = cat } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(active ? cat.color : cat.color.opacity(0.14))
+                        .frame(height: 52)
+                    Image(systemName: cat.icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(active ? .white : cat.color)
+                }
+                Text(cat.displayName)
+                    .font(.system(size: 10))
+                    .foregroundColor(active ? theme.ink : theme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var noteField: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "square.and.pencil")
+                .foregroundColor(theme.muted)
+            TextField("Add a note…", text: $description)
+                .focused($focusedField, equals: .description)
+                .foregroundColor(theme.ink)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(theme.surface)
+        )
+    }
+
+    private var moreDetailsSection: some View {
+        DisclosureGroup(
+            isExpanded: $showMoreDetails,
+            content: {
+                VStack(spacing: 16) {
+                    Divider()
+                    HStack {
+                        Text("Bank")
+                            .foregroundColor(theme.muted)
+                        Spacer()
+                        Picker("Bank", selection: $selectedBank) {
+                            ForEach(Bank.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .labelsHidden()
+                    }
+                    customTextField("Sender", text: $sender, field: .sender)
+                    customTextField("Receiver", text: $receiver, field: .receiver)
+                    customTextField("Reference ID", text: $refId, field: .refId)
+                }
+                .padding(.top, 8)
+            },
+            label: {
+                Text("More Details")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.ink)
+            }
+        )
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(theme.surface)
+        )
+    }
+
+    private func customTextField(_ title: String, text: Binding<String>, field: Field) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(theme.muted)
+            TextField(title, text: text)
+                .focused($focusedField, equals: field)
+                .padding(10)
+                .background(theme.bg)
+                .cornerRadius(8)
+                .foregroundColor(theme.ink)
+        }
+    }
+
+    // MARK: - Sub Transactions Section
 
     private var subTransactionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Sub Transactions")
                     .font(.headline)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(theme.muted)
                 Spacer()
-                
+
                 // Add Remaining Button
                 if remainingAmount > 0 {
                     Button(action: addRemainingAmount) {
                         Text("Add Remaining (\(remainingAmount.formattedCurrency))")
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundColor(theme.primary)
+                            .foregroundColor(theme.brand)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(theme.primary.opacity(0.1))
+                            .background(theme.brand.opacity(0.1))
                             .cornerRadius(12)
                     }
                 }
@@ -99,9 +378,9 @@ struct AddTransactionView: View {
                             .multilineTextAlignment(.trailing)
                             .padding(.vertical, 4)
                             .padding(.horizontal, 8)
-                            .background(theme.cardBackground.opacity(0.7))
+                            .background(theme.bg.opacity(0.7))
                             .cornerRadius(6)
-                            . onChange(of: draft.amount) { _ in
+                            .onChange(of: draft.amount) { _ in
                                 handleDraftChange()
                             }
 
@@ -121,7 +400,7 @@ struct AddTransactionView: View {
                                 .frame(width: 30, height: 30)
                         }
 
-                        // Delete Button (only if not the only empty row, or just clearer to allow delete)
+                        // Delete Button
                         Button(action: {
                             deleteDraft(id: draft.id)
                         }) {
@@ -130,7 +409,6 @@ struct AddTransactionView: View {
                                 .font(.title3)
                         }
                         .padding(.leading, 8)
-                        // Don't allowing deleting the last single empty row if you want, or just re-add
                     }
                     .padding()
 
@@ -138,7 +416,7 @@ struct AddTransactionView: View {
                         Divider().padding(.leading)
                     }
                 }
-                
+
                 // Validation Error
                 if let error = subTransactionError {
                     Text(error)
@@ -149,497 +427,26 @@ struct AddTransactionView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .background(theme.cardBackground)
+            .background(theme.surface)
             .cornerRadius(16)
-            .padding(.horizontal) // Matches prior styling
+            .padding(.horizontal)
             .padding(.bottom)
         }
     }
-    
-    // ... logic helpers
-    
-    private var remainingAmount: Double {
-        let total = Double(amount) ?? 0.0
-        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
-        return max(0, total - currentUsed)
-    }
 
-    private func handleDraftChange() {
-        // Clear error
-        subTransactionError = nil
-        
-        let mainTotal = Double(amount) ?? 0.0
-        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
-        
-        // 1. Cleanup: If we meet or exceed total, remove trailing empty row
-        if currentUsed >= mainTotal {
-             if let last = draftSubTransactions.last, last.amount.isEmpty {
-                 draftSubTransactions.removeLast()
-             }
-        }
-        
-        // 2. Append: If we have room, and the last row is Valid/Filled, append new
-        if currentUsed < mainTotal {
-             if let last = draftSubTransactions.last, let val = Double(last.amount), val > 0 {
-                  // Only append if last is not empty (already satisfied by val > 0)
-                  draftSubTransactions.append(DraftSubTransaction())
-             }
-        }
-        
-        // Error check
-        if currentUsed > mainTotal {
-             subTransactionError = "Exceeds total amount"
-        }
-    }
-    
-    private func addRemainingAmount() {
-        let remainder = remainingAmount
-        if remainder <= 0 { return }
-        
-        // If last row is empty, fill it. Else append.
-        if let idx = draftSubTransactions.indices.last, draftSubTransactions[idx].amount.isEmpty {
-            draftSubTransactions[idx].amount = String(remainder)
-        } else {
-            draftSubTransactions.append(DraftSubTransaction(amount: String(remainder)))
-        }
-    }
-    
-    private func deleteDraft(id: UUID) {
-        if let index = draftSubTransactions.firstIndex(where: { $0.id == id }) {
-            draftSubTransactions.remove(at: index)
-        }
-        // Ensure at least one empty row if list becomes empty?
-        if draftSubTransactions.isEmpty {
-            draftSubTransactions.append(DraftSubTransaction())
-        }
-    }
-
-    // ... update populate and save logic ... 
-    
-    private func populateFromTransaction(_ transaction: Transaction) {
-        // ... previous basic fields ...
-        amount = String(transaction.amount) // Need this first for total check
-        // ... (copy lines 639-648)
-        description = transaction.description
-        date = transaction.date
-        type = transaction.type
-        if let category = transaction.categoryId { selectedCategory = category }
-        if let incomeCategory = transaction.incomeCategoryId { selectedIncomeCategory = incomeCategory }
-        if let bank = transaction.bank { selectedBank = bank }
-        sender = transaction.sender ?? ""
-        receiver = transaction.receiver ?? ""
-        refId = transaction.refId ?? ""
-        
-        // Handle SubTransactions
-        if let subs = transaction.subTransactions {
-            draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId) }
-            // Only add empty row if there is remaining amount
-            let subTotal = subs.reduce(0) { $0 + $1.amount }
-            if subTotal < (Double(amount) ?? 0.0) {
-                draftSubTransactions.append(DraftSubTransaction())
-            }
-        } else {
-             // If manual amount set but no subs, add one empty. 
-             // Logic: If opening "New", amount is "" -> append one.
-             // If opening "Edit" with amount 100 but no subs -> append one.
-             draftSubTransactions = [DraftSubTransaction()]
-        }
-    }
-    
-    private func saveTransaction() {
-        guard let amountValue = Double(amount) else { return }
-        
-        // Convert drafts to SubTransactions
-        let finalSubs: [SubTransaction]? = {
-             let valid = draftSubTransactions.compactMap { draft -> SubTransaction? in
-                 guard let val = Double(draft.amount), val > 0 else { return nil }
-                 return SubTransaction(amount: val, categoryId: draft.category)
-             }
-             return valid.isEmpty ? nil : valid
-        }()
-
-        if var transaction = transactionToEdit {
-            transaction.amount = amountValue
-            transaction.description = description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description
-            transaction.date = date
-            transaction.type = type
-            transaction.sender = sender.isEmpty ? nil : sender
-            transaction.receiver = receiver.isEmpty ? nil : receiver
-            transaction.categoryId = type == .expense ? selectedCategory : nil
-            transaction.incomeCategoryId = type == .income ? selectedIncomeCategory : nil
-            transaction.bank = selectedBank == .unknown ? nil : selectedBank
-            transaction.refId = refId.isEmpty ? nil : refId
-            transaction.subTransactions = finalSubs
-
-            transactionStore.updateTransaction(transaction)
-        } else {
-            let transaction = Transaction(
-                refId: refId.isEmpty ? nil : refId,
-                amount: amountValue,
-                description: description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description,
-                date: date,
-                sender: sender.isEmpty ? nil : sender,
-                receiver: receiver.isEmpty ? nil : receiver,
-                type: type,
-                source: slipData != nil ? .scan : .manual,
-                categoryId: type == .expense ? selectedCategory : nil,
-                incomeCategoryId: type == .income ? selectedIncomeCategory : nil,
-                bank: selectedBank == .unknown ? nil : selectedBank,
-                imagePath: nil,
-                subTransactions: finalSubs
-            )
-            transactionStore.addTransaction(transaction)
-        }
-
-        dismiss()
-    }
-
-    init(slipData: SlipData? = nil, transactionToEdit: Transaction? = nil) {
-        self.slipData = slipData
-        self.transactionToEdit = transactionToEdit
-    }
-
-    var body: some View {
-        ZStack {
-            theme.background
-                .ignoresSafeArea()
-
-            NavigationView {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // MARK: - Type & Amount
-
-                        VStack(spacing: 20) {
-                            Picker("Type", selection: $type) {
-                                Text("Expense").tag(TransactionType.expense)
-                                Text("Income").tag(TransactionType.income)
-                                Text("Transfer").tag(TransactionType.transfer)
-                            }
-                            .pickerStyle(SegmentedPickerStyle())
-
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("฿")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(.secondary)
-
-                                TextField("0", text: $amount)
-                                    .keyboardType(.decimalPad)
-                                    .font(.system(size: 64, weight: .bold))
-                                    .multilineTextAlignment(.center)
-                                    .focused($focusedField, equals: .amount)
-                                    .minimumScaleFactor(0.5)
-                            }
-                            .padding(.vertical, 8)
-
-                            // Date Row
-                            Button(action: { showDatePicker = true }) {
-                                HStack {
-                                    Image(systemName: "calendar")
-                                        .foregroundColor(theme.primary)
-                                    Text(dateFormatted)
-                                        .foregroundColor(theme.textPrimary)
-                                        .fontWeight(.medium)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(theme.textSecondary)
-                                }
-                                .padding()
-                                .background(theme.cardBackground.opacity(0.7))
-                                .cornerRadius(10)
-                            }
-                        }
-                        .padding()
-                        .background(theme.cardBackground)
-                        .cornerRadius(20)
-                        .padding(.horizontal)
-                        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-
-                        // MARK: - Category
-
-                        if type != .transfer {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Text("Category")
-                                        .font(.headline)
-                                        .foregroundColor(theme.textSecondary)
-                                    Spacer()
-                                    Button(action: {
-                                        withAnimation(.spring()) {
-                                            isCategoryExpanded.toggle()
-                                        }
-                                    }) {
-                                        Image(systemName: isCategoryExpanded ? "chevron.up" : "chevron.down")
-                                            .font(.caption)
-                                            .foregroundColor(theme.primary)
-                                            .padding(8)
-                                            .background(theme.cardBackground.opacity(0.7))
-                                            .clipShape(Circle())
-                                    }
-                                }
-                                .padding(.horizontal)
-
-                                if type == .expense {
-                                    if isCategoryExpanded {
-                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
-                                            ForEach(ExpenseCategory.allCases) { category in
-                                                categoryButton(
-                                                    icon: category.icon,
-                                                    color: category.color,
-                                                    name: category.displayName,
-                                                    isSelected: selectedCategory == category
-                                                ) {
-                                                    selectedCategory = category
-                                                }
-                                            }
-                                        }
-                                        .padding()
-                                        .background(theme.cardBackground)
-                                        .cornerRadius(20)
-                                        .padding(.horizontal)
-                                    } else {
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 16) {
-                                                ForEach(ExpenseCategory.allCases) { category in
-                                                    categoryButton(
-                                                        icon: category.icon,
-                                                        color: category.color,
-                                                        name: category.displayName,
-                                                        isSelected: selectedCategory == category
-                                                    ) {
-                                                        selectedCategory = category
-                                                    }
-                                                }
-                                            }
-                                            .padding()
-                                        }
-                                        .background(theme.cardBackground)
-                                        .cornerRadius(20)
-                                        .padding(.horizontal)
-                                    }
-                                } else {
-                                    if isCategoryExpanded {
-                                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 8) {
-                                            ForEach(IncomeCategory.allCases) { category in
-                                                categoryButton(
-                                                    icon: category.icon,
-                                                    color: category.color,
-                                                    name: category.displayName,
-                                                    isSelected: selectedIncomeCategory == category
-                                                ) {
-                                                    selectedIncomeCategory = category
-                                                }
-                                            }
-                                        }
-                                        .padding()
-                                        .background(theme.cardBackground)
-                                        .cornerRadius(20)
-                                        .padding(.horizontal)
-                                    } else {
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 16) {
-                                                ForEach(IncomeCategory.allCases) { category in
-                                                    categoryButton(
-                                                        icon: category.icon,
-                                                        color: category.color,
-                                                        name: category.displayName,
-                                                        isSelected: selectedIncomeCategory == category
-                                                    ) {
-                                                        selectedIncomeCategory = category
-                                                    }
-                                                }
-                                            }
-                                            .padding()
-                                        }
-                                        .background(theme.cardBackground)
-                                        .cornerRadius(20)
-                                        .padding(.horizontal)
-                                    }
-                                }
-                            }
-                        }
-
-                        // MARK: - Note
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Note")
-                                .font(.headline)
-                                .foregroundColor(theme.textSecondary)
-                                .padding(.horizontal)
-
-                            HStack {
-                                Image(systemName: "square.and.pencil")
-                                    .foregroundColor(theme.textSecondary)
-                                TextField("Add a description...", text: $description)
-                                    .focused($focusedField, equals: .description)
-                            }
-                            .padding()
-                            .background(theme.cardBackground)
-                            .cornerRadius(16)
-                            .padding(.horizontal)
-                        }
-
-                        // MARK: - Sub Transactions (Expense Only)
-
-                        if type == .expense {
-                            subTransactionsSection
-                        }
-
-                        // MARK: - Slip Image
-
-                        if loadedImage != nil || transactionToEdit?.imagePath != nil {
-                            slipImageSection
-                                .padding(.horizontal)
-                        }
-
-                        // MARK: - More Details (Bank, etc)
-
-                        DisclosureGroup(
-                            isExpanded: $showMoreDetails,
-                            content: {
-                                VStack(spacing: 16) {
-                                    Divider()
-
-                                    HStack {
-                                        Text("Bank")
-                                        Spacer()
-                                        Picker("Bank", selection: $selectedBank) {
-                                            ForEach(Bank.allCases) { bank in
-                                                Text(bank.rawValue).tag(bank)
-                                            }
-                                        }
-                                        .labelsHidden()
-                                    }
-
-                                    customTextField(title: "Sender", text: $sender, field: .sender)
-                                    customTextField(title: "Receiver", text: $receiver, field: .receiver)
-                                    customTextField(title: "Reference ID", text: $refId, field: .refId)
-                                }
-                                .padding(.top, 8)
-                            },
-                            label: {
-                                Text("More Details")
-                                    .font(.headline)
-                                    .foregroundColor(theme.textPrimary)
-                            }
-                        )
-                        .padding()
-                        .background(theme.cardBackground)
-                        .cornerRadius(16)
-                        .padding(.horizontal)
-
-                        // Bottom Spacer
-                        Spacer(minLength: 50)
-                    }
-                }
-                .background(theme.background)
-                .navigationTitle(transactionToEdit == nil ? "New Transaction" : "Edit Transaction")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") { dismiss() }
-                    }
-
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(transactionToEdit == nil ? "Add" : "Save") {
-                            saveTransaction()
-                        }
-                        .disabled(amount.isEmpty)
-                        .fontWeight(.bold)
-                    }
-
-                    ToolbarItem(placement: .keyboard) {
-                        HStack {
-                            Spacer()
-                            Button("Done") { focusedField = nil }
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                if let transaction = transactionToEdit {
-                    populateFromTransaction(transaction)
-                    loadImage(from: transaction.imagePath)
-                } else {
-                    populateFromSlipData()
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                if #available(iOS 16.4, *) {
-                    DatePicker("Select Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .datePickerStyle(.graphical)
-                        .presentationDetents([.medium])
-                        .presentationDragIndicator(.visible)
-                        .padding()
-                } else {
-                    DatePicker("Select Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .datePickerStyle(.graphical)
-                        .padding()
-                }
-            }
-
-            // ✅ Overlay in the SAME hierarchy (smooth matchedGeometryEffect)
-            if isShowSlip {
-                fullScreenSlipOverlay
-                    .transition(.opacity)
-                    .zIndex(999)
-            }
-        }
-    }
-
-    // MARK: - Custom Views
-
-    private func categoryButton(icon: String, color: Color, name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? color : theme.cardBackground.opacity(0.7))
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: icon)
-                        .font(.system(size: 20))
-                        .foregroundColor(isSelected ? .white : color)
-                }
-
-                if isCategoryExpanded {
-                    Text(name)
-                        .font(.caption)
-                        .foregroundColor(isSelected ? theme.textPrimary : theme.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
-        }
-    }
-
-    private func customTextField(title: String, text: Binding<String>, field: Field) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(theme.textSecondary)
-            TextField(title, text: text)
-                .textFieldStyle(.plain)
-                .focused($focusedField, equals: field)
-                .padding(10)
-                .background(theme.cardBackground.opacity(0.7))
-                .cornerRadius(8)
-        }
-    }
-
-    // MARK: - Sections
+    // MARK: - Slip Image Section
 
     private var slipImageSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Slip Image")
                 .font(.headline)
-                .foregroundColor(theme.textSecondary)
+                .foregroundColor(theme.muted)
 
             if let loadedImage = loadedImage {
                 if !isShowSlip {
                     ZStack {
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(theme.cardBackground)
+                            .fill(theme.surface)
                             .frame(height: 200)
 
                         Image(uiImage: loadedImage)
@@ -672,13 +479,11 @@ struct AddTransactionView: View {
                     Spacer()
                 }
                 .frame(height: 200)
-                .background(theme.cardBackground)
+                .background(theme.surface)
                 .cornerRadius(16)
             }
         }
     }
-
-
 
     // MARK: - Fullscreen Overlay (same hierarchy)
 
@@ -740,9 +545,134 @@ struct AddTransactionView: View {
         return formatter.string(from: date)
     }
 
+    private var remainingAmount: Double {
+        let total = Double(amount) ?? 0.0
+        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
+        return max(0, total - currentUsed)
+    }
 
+    private func handleDraftChange() {
+        // Clear error
+        subTransactionError = nil
 
+        let mainTotal = Double(amount) ?? 0.0
+        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
 
+        // 1. Cleanup: If we meet or exceed total, remove trailing empty row
+        if currentUsed >= mainTotal {
+            if let last = draftSubTransactions.last, last.amount.isEmpty {
+                draftSubTransactions.removeLast()
+            }
+        }
+
+        // 2. Append: If we have room, and the last row is Valid/Filled, append new
+        if currentUsed < mainTotal {
+            if let last = draftSubTransactions.last, let val = Double(last.amount), val > 0 {
+                // Only append if last is not empty (already satisfied by val > 0)
+                draftSubTransactions.append(DraftSubTransaction())
+            }
+        }
+
+        // Error check
+        if currentUsed > mainTotal {
+            subTransactionError = "Exceeds total amount"
+        }
+    }
+
+    private func addRemainingAmount() {
+        let remainder = remainingAmount
+        if remainder <= 0 { return }
+
+        // If last row is empty, fill it. Else append.
+        if let idx = draftSubTransactions.indices.last, draftSubTransactions[idx].amount.isEmpty {
+            draftSubTransactions[idx].amount = String(remainder)
+        } else {
+            draftSubTransactions.append(DraftSubTransaction(amount: String(remainder)))
+        }
+    }
+
+    private func deleteDraft(id: UUID) {
+        if let index = draftSubTransactions.firstIndex(where: { $0.id == id }) {
+            draftSubTransactions.remove(at: index)
+        }
+        // Ensure at least one empty row if list becomes empty
+        if draftSubTransactions.isEmpty {
+            draftSubTransactions.append(DraftSubTransaction())
+        }
+    }
+
+    private func populateFromTransaction(_ transaction: Transaction) {
+        amount = String(transaction.amount) // Need this first for total check
+        description = transaction.description
+        date = transaction.date
+        type = transaction.type
+        if let category = transaction.categoryId { selectedCategory = category }
+        if let incomeCategory = transaction.incomeCategoryId { selectedIncomeCategory = incomeCategory }
+        if let bank = transaction.bank { selectedBank = bank }
+        sender = transaction.sender ?? ""
+        receiver = transaction.receiver ?? ""
+        refId = transaction.refId ?? ""
+
+        // Handle SubTransactions
+        if let subs = transaction.subTransactions {
+            draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId) }
+            // Only add empty row if there is remaining amount
+            let subTotal = subs.reduce(0) { $0 + $1.amount }
+            if subTotal < (Double(amount) ?? 0.0) {
+                draftSubTransactions.append(DraftSubTransaction())
+            }
+        } else {
+            draftSubTransactions = [DraftSubTransaction()]
+        }
+    }
+
+    private func saveTransaction() {
+        guard let amountValue = Double(amount) else { return }
+
+        // Convert drafts to SubTransactions
+        let finalSubs: [SubTransaction]? = {
+            let valid = draftSubTransactions.compactMap { draft -> SubTransaction? in
+                guard let val = Double(draft.amount), val > 0 else { return nil }
+                return SubTransaction(amount: val, categoryId: draft.category)
+            }
+            return valid.isEmpty ? nil : valid
+        }()
+
+        if var transaction = transactionToEdit {
+            transaction.amount = amountValue
+            transaction.description = description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description
+            transaction.date = date
+            transaction.type = type
+            transaction.sender = sender.isEmpty ? nil : sender
+            transaction.receiver = receiver.isEmpty ? nil : receiver
+            transaction.categoryId = type == .expense ? selectedCategory : nil
+            transaction.incomeCategoryId = type == .income ? selectedIncomeCategory : nil
+            transaction.bank = selectedBank == .unknown ? nil : selectedBank
+            transaction.refId = refId.isEmpty ? nil : refId
+            transaction.subTransactions = finalSubs
+
+            transactionStore.updateTransaction(transaction)
+        } else {
+            let transaction = Transaction(
+                refId: refId.isEmpty ? nil : refId,
+                amount: amountValue,
+                description: description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description,
+                date: date,
+                sender: sender.isEmpty ? nil : sender,
+                receiver: receiver.isEmpty ? nil : receiver,
+                type: type,
+                source: slipData != nil ? .scan : .manual,
+                categoryId: type == .expense ? selectedCategory : nil,
+                incomeCategoryId: type == .income ? selectedIncomeCategory : nil,
+                bank: selectedBank == .unknown ? nil : selectedBank,
+                imagePath: nil,
+                subTransactions: finalSubs
+            )
+            transactionStore.addTransaction(transaction)
+        }
+
+        dismiss()
+    }
 
     private func populateFromSlipData() {
         guard let slipData = slipData else { return }
@@ -780,8 +710,6 @@ struct AddTransactionView: View {
             }
         }
     }
-
-
 
     // MARK: - Zoomable ScrollView (UIKit)
 
