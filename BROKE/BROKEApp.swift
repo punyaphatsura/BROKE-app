@@ -22,17 +22,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 @main
 struct BROKEApp: App {
-    // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    
+
     @StateObject var transactionStore = TransactionStore()
     @StateObject var photoService = PhotoService()
-    
+    @StateObject var themeManager = ThemeManager()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(transactionStore)
                 .environmentObject(photoService)
+                .environmentObject(themeManager)
         }
     }
 }
