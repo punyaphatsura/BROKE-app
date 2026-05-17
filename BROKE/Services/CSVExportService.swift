@@ -77,7 +77,6 @@ class CSVExportService {
             try csvData.write(to: path, atomically: true, encoding: .utf8)
             return path
         } catch {
-            print("Failed to write CSV file: \(error)")
             return nil
         }
     }

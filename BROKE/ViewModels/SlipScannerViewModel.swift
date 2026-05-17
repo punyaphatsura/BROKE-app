@@ -31,13 +31,11 @@ class SlipScannerViewModel: NSObject, ObservableObject {
     func processImage(_ image: UIImage, asset: PHAsset? = nil) {
         // Deduplication Check
         if let asset = asset, ImageHashManager.shared.isProcessed(asset: asset) {
-            print("Duplicate asset detected. Skipping Gemini call.")
             errorMessage = "Image already processed."
             return
         }
 
         if asset == nil, ImageHashManager.shared.isProcessed(image: image) {
-            print("Duplicate image hash detected. Skipping Gemini call.")
             errorMessage = "Image already processed."
             return
         }
@@ -87,9 +85,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
             var currentQuota = 0
             do {
                 currentQuota = try await slipExtractor.checkSlipOKQuota()
-                print("SlipOK Quota: \(currentQuota), Assets: \(assets.count)")
             } catch {
-                print("Failed to check quota: \(error). Proceeding with default strategy (0 quota assumption).")
             }
 
             let startingQuota = currentQuota
@@ -189,14 +185,12 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                                 ImageHashManager.shared.markAsProcessed(image: image)
                                 currentBatchProcessed += 1
                             } else {
-                                print("Batch processing failed for an image: \(self.slipExtractor.lastError ?? "Unknown error")")
 
                                 // Check if the failure was due to Quota Limit
                                 // If we thought we had quota but hit a limit, switch subsequent requests to Gemini?
                                 // Our local `remainingQuota` logic handles proactive switching.
                                 // If `showQuotaError` is true, it means we likely hit it unexpectedly.
                                 if self.slipExtractor.showQuotaError {
-                                    print("Quota limit reached unexpectedly. Continuing batch with Gemini might be handled by retry or next loop.")
                                     // In this specific flow, we don't strictly stop, we just failed this one.
                                     // Retries will handle it, and if we pass 0 quota to retries, they will use Gemini.
                                 }
@@ -214,8 +208,6 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                 let remainingUnprocessed = assets.filter { !ImageHashManager.shared.isProcessed(asset: $0) }
 
                 if !remainingUnprocessed.isEmpty, retryCount < 3 {
-                    print("Batch partially failed. Retrying... (\(retryCount + 1)/3)")
-                    print("Remaining unprocessed: \(remainingUnprocessed.count)")
 
                     // On retry, we assume quota is exhausted or we just pass whatever was calculated.
                     // If we used up quota in the first pass, `remainingQuota` is likely 0 or low.
@@ -227,7 +219,6 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                 } else {
                     self.isProcessing = false
                     if !remainingUnprocessed.isEmpty {
-                        print("Batch finished with \(remainingUnprocessed.count) failed items after retries.")
                     }
                     completion(newTotal)
                 }

@@ -63,7 +63,6 @@ class PhotoService: ObservableObject {
             assetOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
 
             let assets = PHAsset.fetchAssets(in: album, options: assetOptions)
-            print("Found \(assets.count) assets in \(albumName) after \(cutoffDate)")
 
             assets.enumerateObjects { asset, _, _ in
                 fetchedAssets.append(asset)

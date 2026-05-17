@@ -183,7 +183,6 @@ class SlipExtractionService: ObservableObject {
             }
 
             if let error = error {
-                print("SlipOK Error: \(error)")
                 completion(nil)
                 return
             }
@@ -207,7 +206,6 @@ class SlipExtractionService: ObservableObject {
                     completion(nil)
                 }
             } catch {
-                print("SlipOK Parse Error: \(error)")
                 completion(nil)
             }
         }.resume()
@@ -226,7 +224,6 @@ class SlipExtractionService: ObservableObject {
             guard let result = request.results?.first as? VNBarcodeObservation else { return nil }
             return result.payloadStringValue
         } catch {
-            print("QR Extraction Error: \(error)")
             return nil
         }
     }
@@ -281,8 +278,6 @@ class SlipExtractionService: ObservableObject {
                 return SlipData(dictionary: json)
             }
         } catch {
-            print("JSON Parse Error: \(error)")
-            print("Raw text: \(text)")
         }
 
         return nil
