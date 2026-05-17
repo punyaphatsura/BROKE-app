@@ -2,40 +2,36 @@
 //  ContentView.swift
 //  BROKE
 //
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
 
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab = 0
+    @State private var selectedTab: AppTab = .home
     @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem {
-                    Label("Home", systemImage: "house")
+        ZStack(alignment: .bottom) {
+            Group {
+                switch selectedTab {
+                case .home:
+                    HomeView()
+                case .analytics:
+                    NavigationStack { AnalyticsView() }
+                case .settings:
+                    NavigationStack { SettingsView() }
                 }
-                .tag(0)
-
-            NavigationStack {
-                AnalyticsView()
             }
-            .tabItem {
-                Label("Analytics", systemImage: "chart.pie.fill")
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 88)
             }
-            .tag(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(2)
+            FloatingTabBar(selectedTab: $selectedTab)
+                .ignoresSafeArea(.keyboard)
         }
-        .tint(theme.primary)
-        .ignoresSafeArea()
+        .background(theme.bg.ignoresSafeArea())
         .preferredColorScheme(theme.preferredColorScheme)
+        .ignoresSafeArea(.keyboard)
     }
 }
 
