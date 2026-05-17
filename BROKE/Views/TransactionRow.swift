@@ -2,13 +2,12 @@
 //  TransactionRow.swift
 //  BROKE
 //
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
 
 import SwiftUI
 
 struct TransactionRow: View {
     @EnvironmentObject var transactionStore: TransactionStore
+    @EnvironmentObject var theme: ThemeManager
     let transaction: Transaction
     @State private var showingEditSheet = false
 
@@ -16,8 +15,7 @@ struct TransactionRow: View {
         HStack(spacing: 16) {
             if transaction.type == .expense {
                 if let categoryId = transaction.categoryId,
-                   let category = ExpenseCategory(rawValue: categoryId.rawValue)
-                {
+                   let category = ExpenseCategory(rawValue: categoryId.rawValue) {
                     Menu {
                         ForEach(ExpenseCategory.allCases) { cat in
                             Button(action: {
@@ -29,17 +27,14 @@ struct TransactionRow: View {
                             }
                         }
                     } label: {
-                        HStack {
-                            Image(systemName: category.icon)
-                                .foregroundColor(category.color)
-                                .font(.title)
-                        }
+                        Image(systemName: category.icon)
+                            .foregroundColor(category.color)
+                            .font(.title)
                     }
                 }
             } else if transaction.type == .income {
                 if let categoryId = transaction.incomeCategoryId,
-                   let category = IncomeCategory(rawValue: categoryId.rawValue)
-                {
+                   let category = IncomeCategory(rawValue: categoryId.rawValue) {
                     Menu {
                         ForEach(IncomeCategory.allCases) { cat in
                             Button(action: {
@@ -51,55 +46,56 @@ struct TransactionRow: View {
                             }
                         }
                     } label: {
-                        HStack {
-                            Image(systemName: category.icon)
-                                .foregroundColor(category.color)
-                                .font(.title)
-                        }
+                        Image(systemName: category.icon)
+                            .foregroundColor(category.color)
+                            .font(.title)
                     }
                 }
             } else {
-                // Transfer
                 Image(systemName: "arrow.left.arrow.right")
-                    .foregroundColor(.blue)
+                    .foregroundColor(theme.primary)
                     .font(.title)
             }
+
             VStack(alignment: .leading) {
                 if transaction.type == .expense {
                     if let category = transaction.categoryId {
                         Text(category.displayName)
                             .font(.headline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(theme.textPrimary)
                     }
                 } else if transaction.type == .income {
                     if let category = transaction.incomeCategoryId {
                         Text(category.displayName)
                             .font(.headline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(theme.textPrimary)
                     }
                 } else {
                     Text("Transfer")
                         .font(.headline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(theme.textPrimary)
                 }
                 Text(transaction.description)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondary)
 
                 if let subTransactions = transaction.subTransactions, !subTransactions.isEmpty {
                     Text(subTransactions.map { $0.categoryId.displayName }.joined(separator: ", "))
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
             }
 
             Spacer()
-            VStack(alignment: .trailing) {
-                Text(transaction.amount.formattedCurrency)
-                    .font(.headline)
-                    .foregroundColor(transaction.type == .income ? .green : (transaction.type == .expense ? .red : .primary))
-            }
+
+            Text(transaction.amount.formattedCurrency)
+                .font(.headline)
+                .foregroundColor(
+                    transaction.type == .income ? theme.income :
+                    transaction.type == .expense ? theme.expense :
+                    theme.textPrimary
+                )
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing) {
