@@ -2,17 +2,20 @@
 //  TransactionListView.swift
 //  BROKE
 //
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
 
 import SwiftUI
 
 struct TransactionListView: View {
     @EnvironmentObject var transactionStore: TransactionStore
+    @EnvironmentObject var theme: ThemeManager
     @State private var showingAddTransaction = false
     @State private var filterType: TransactionType? = nil
+    var customTransactions: [Transaction]?
 
     var filteredTransactions: [Transaction] {
+        if let custom = customTransactions {
+            return custom
+        }
         if let filterType = filterType {
             return transactionStore.transactions.filter { $0.type == filterType }
         } else {
@@ -30,13 +33,15 @@ struct TransactionListView: View {
     var body: some View {
         NavigationView {
             VStack {
-                Picker("Filter", selection: $filterType) {
-                    Text("All").tag(nil as TransactionType?)
-                    Text("Income").tag(TransactionType.income as TransactionType?)
-                    Text("Expense").tag(TransactionType.expense as TransactionType?)
+                if customTransactions == nil {
+                    Picker("Filter", selection: $filterType) {
+                        Text("All").tag(nil as TransactionType?)
+                        Text("Income").tag(TransactionType.income as TransactionType?)
+                        Text("Expense").tag(TransactionType.expense as TransactionType?)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding(.horizontal)
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding(.horizontal)
 
                 List {
                     ForEach(groupedTransactions, id: \.key) { section in
@@ -52,13 +57,14 @@ struct TransactionListView: View {
                 }
                 .listStyle(InsetGroupedListStyle())
             }
-            .navigationTitle("Transactions")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingAddTransaction = true
-                    }) {
-                        Image(systemName: "plus")
+                if customTransactions == nil {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            showingAddTransaction = true
+                        }) {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
             }
@@ -70,13 +76,11 @@ struct TransactionListView: View {
 
     private func deleteTransactions(at offsets: IndexSet, in transactions: [Transaction]) {
         let transactionsToDelete = offsets.map { transactions[$0] }
-
         for transaction in transactionsToDelete {
             if let index = transactionStore.transactions.firstIndex(where: { $0.id == transaction.id }) {
                 transactionStore.transactions.remove(at: index)
             }
         }
-
         transactionStore.saveTransactions()
     }
 }
@@ -84,6 +88,7 @@ struct TransactionListView: View {
 struct TransactionSectionHeader: View {
     let date: Date
     let transactions: [Transaction]
+    @EnvironmentObject var theme: ThemeManager
 
     var income: Double {
         transactions.filter { $0.type == .income }.reduce(0) { $0 + $1.amount }
@@ -95,7 +100,6 @@ struct TransactionSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .center) {
-            // Date Part
             VStack(alignment: .center, spacing: 2) {
                 Text(date, format: .dateTime.weekday(.abbreviated))
                     .font(.caption)
@@ -106,19 +110,19 @@ struct TransactionSectionHeader: View {
                     .font(.title3)
                     .fontWeight(.bold)
             }
+            .foregroundColor(theme.textPrimary)
             .frame(width: 50)
 
             Spacer()
 
-            // Summary Part
             VStack(alignment: .leading, spacing: 4) {
                 if income > 0 {
                     HStack {
                         Spacer()
                         Image(systemName: "arrow.down.left")
-                            .foregroundColor(.green)
+                            .foregroundColor(theme.income)
                         Text(income.formattedCurrency)
-                            .foregroundColor(.green)
+                            .foregroundColor(theme.income)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -127,9 +131,9 @@ struct TransactionSectionHeader: View {
                     HStack {
                         Spacer()
                         Image(systemName: "arrow.up.right")
-                            .foregroundColor(.red)
+                            .foregroundColor(theme.expense)
                         Text(expense.formattedCurrency)
-                            .foregroundColor(.red)
+                            .foregroundColor(theme.expense)
                     }
                     .frame(maxWidth: .infinity)
                 }
