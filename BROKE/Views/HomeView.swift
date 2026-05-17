@@ -50,6 +50,7 @@ struct HomeView: View {
 
                 Spacer()
             }
+            .background(theme.background.ignoresSafeArea())
             .toolbar {
                 toolbarContent
             }
@@ -197,11 +198,14 @@ struct HomeView: View {
                     Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
                         ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
                             TransactionRow(transaction: transaction)
+                                .listRowBackground(theme.cardBackground)
                         }
                     }
                 }
             }
             .listStyle(InsetGroupedListStyle())
+            .scrollContentBackground(.hidden)
+            .background(theme.background)
             .refreshable {
                 await refreshData()
             }
@@ -370,6 +374,6 @@ struct TransactionThumbnailView: View {
         .frame(width: 120, height: 100)
         .background(theme.cardBackground)
         .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .shadow(color: theme.textPrimary.opacity(0.1), radius: 2, x: 0, y: 1)
     }
 }

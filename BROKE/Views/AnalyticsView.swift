@@ -135,6 +135,7 @@ struct AnalyticsView: View {
             }
             .padding(.vertical)
         }
+        .background(theme.background.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -390,7 +391,7 @@ struct CategoryBreakdownChart: View {
             if !top2Caption.isEmpty {
                 Text(top2Caption)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondary)
                     .padding(.top, 4)
             }
         }

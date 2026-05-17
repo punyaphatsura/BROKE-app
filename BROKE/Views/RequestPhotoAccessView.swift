@@ -10,13 +10,14 @@ import PhotosUI
 
 struct RequestPhotoAccessView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var theme: ThemeManager
     @State private var accessStatus: PHAuthorizationStatus = .notDetermined
     
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "photo.on.rectangle")
                 .font(.system(size: 72))
-                .foregroundColor(.blue)
+                .foregroundColor(theme.primary)
             
             Text("Photo Library Access")
                 .font(.title)
@@ -33,7 +34,7 @@ struct RequestPhotoAccessView: View {
                 Text(accessStatus == .authorized ? "Access Granted" : "Allow Access")
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(accessStatus == .authorized ? Color.green : Color.blue)
+                    .background(accessStatus == .authorized ? theme.income : theme.primary)
                     .foregroundColor(.white)
                     .cornerRadius(8)
             }
@@ -47,6 +48,7 @@ struct RequestPhotoAccessView: View {
             .padding()
         }
         .padding()
+        .background(theme.background.ignoresSafeArea())
         .onAppear {
             print("[DEBUG] View appeared — checking photo access status")
             checkPhotoLibraryAccess()

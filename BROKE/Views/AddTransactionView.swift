@@ -353,7 +353,7 @@ struct AddTransactionView: View {
                         .background(theme.cardBackground)
                         .cornerRadius(20)
                         .padding(.horizontal)
-                        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                        .shadow(color: theme.textPrimary.opacity(0.05), radius: 5, x: 0, y: 2)
 
                         // MARK: - Category
 

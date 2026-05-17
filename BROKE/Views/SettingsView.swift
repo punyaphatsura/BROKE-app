@@ -68,7 +68,7 @@ struct SettingsView: View {
                             ProgressView()
                         } else if let quota = viewModel.slipOKQuota {
                             Text("\(quota)")
-                                .foregroundColor(quota < 10 ? .red : .primary)
+                                .foregroundColor(quota < 10 ? theme.expense : theme.textPrimary)
                         } else {
                             Text("-")
                         }
@@ -77,7 +77,7 @@ struct SettingsView: View {
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(theme.expense)
                     }
 
                     Button("Refresh Quota") {
@@ -101,7 +101,7 @@ struct SettingsView: View {
                     if let msg = viewModel.importMessage, !viewModel.isImporting {
                         Text(msg)
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(theme.income)
                     }
 
                     Button("Export to CSV") {
@@ -119,6 +119,8 @@ struct SettingsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(theme.background.ignoresSafeArea())
             .navigationTitle("Settings")
             .onAppear {
                 viewModel.fetchQuota()

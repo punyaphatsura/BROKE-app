@@ -48,6 +48,7 @@ struct TransactionListView: View {
                         Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
                             ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
                                 TransactionRow(transaction: transaction)
+                                    .listRowBackground(theme.cardBackground)
                             }
                             .onDelete { indexSet in
                                 deleteTransactions(at: indexSet, in: section.value)
@@ -56,7 +57,10 @@ struct TransactionListView: View {
                     }
                 }
                 .listStyle(InsetGroupedListStyle())
+                .scrollContentBackground(.hidden)
+                .background(theme.background)
             }
+            .background(theme.background.ignoresSafeArea())
             .toolbar {
                 if customTransactions == nil {
                     ToolbarItem(placement: .navigationBarTrailing) {
