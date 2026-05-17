@@ -117,8 +117,13 @@ struct SettingsView: View {
             allowedContentTypes: [.commaSeparatedText, .plainText],
             allowsMultipleSelection: false
         ) { result in
-            if case let .success(urls) = result, let url = urls.first {
-                viewModel.importCSV(from: url, into: transactionStore)
+            switch result {
+            case let .success(urls):
+                if let url = urls.first {
+                    viewModel.importCSV(from: url, into: transactionStore)
+                }
+            case let .failure(error):
+                viewModel.errorMessage = "File selection failed: \(error.localizedDescription)"
             }
         }
     }

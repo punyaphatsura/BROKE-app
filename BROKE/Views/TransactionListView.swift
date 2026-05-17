@@ -10,6 +10,7 @@ struct TransactionListView: View {
     @EnvironmentObject var theme: ThemeManager
     @State private var showingAddTransaction = false
     @State private var filterType: TransactionType? = nil
+    @State private var selectedForEdit: Transaction? = nil
     var customTransactions: [Transaction]?
 
     var filteredTransactions: [Transaction] {
@@ -42,6 +43,9 @@ struct TransactionListView: View {
             .padding(.bottom, 20)
         }
         .background(theme.bg.ignoresSafeArea())
+        .sheet(item: $selectedForEdit) { transaction in
+            AddTransactionView(transactionToEdit: transaction)
+        }
         .toolbar {
             if customTransactions == nil {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -100,6 +104,7 @@ struct TransactionListView: View {
                 let sorted = transactions.sorted(by: { $0.date > $1.date })
                 ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, tx in
                     TransactionRow(transaction: tx)
+                        .onTapGesture { selectedForEdit = tx }
                     if idx < sorted.count - 1 {
                         Divider().padding(.leading, 68)
                     }
@@ -111,14 +116,5 @@ struct TransactionListView: View {
                     .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             )
         }
-    }
-
-    private func deleteTransactions(at offsets: IndexSet, in transactions: [Transaction]) {
-        for t in offsets.map({ transactions[$0] }) {
-            if let i = transactionStore.transactions.firstIndex(where: { $0.id == t.id }) {
-                transactionStore.transactions.remove(at: i)
-            }
-        }
-        transactionStore.saveTransactions()
     }
 }
