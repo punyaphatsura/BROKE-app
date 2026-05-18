@@ -17,6 +17,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
 
     // OCR Settings
     @Published var enableSlipValidation = true
+    @AppStorage("geminiEnabled") private var geminiEnabled: Bool = true
 
     private let slipExtractor = SlipExtractionService()
 
@@ -143,7 +144,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                 semaphore.wait()
 
                 // Determine strategy for this specific asset
-                let useGeminiOnly = remainingQuota <= 0
+                let useGeminiOnly = remainingQuota <= 0 && geminiEnabled
                 if remainingQuota > 0 {
                     remainingQuota -= 1
                 }
@@ -167,7 +168,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
                         return
                     }
 
-                    self.slipExtractor.processSlip(image: image, useGeminiOnly: useGeminiOnly) { [weak self] slipData in
+                    self.slipExtractor.processSlip(image: image, useGeminiOnly: useGeminiOnly, geminiEnabled: geminiEnabled) { [weak self] slipData in
                         DispatchQueue.main.async {
                             guard let self = self else {
                                 semaphore.signal()

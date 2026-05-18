@@ -12,6 +12,7 @@ struct SettingsView: View {
     @EnvironmentObject var theme: ThemeManager
     @AppStorage("lastScannedDate") private var lastScannedDate: Date?
     @AppStorage("userName") private var userName: String = ""
+    @AppStorage("geminiEnabled") private var geminiEnabled: Bool = true
     @State private var isRequestingAccess = false
     @State private var isImportingFile = false
     @State private var exportedFileURL: URL?
@@ -86,6 +87,15 @@ struct SettingsView: View {
                                 )
                         } else {
                             Text("—")
+                                .foregroundColor(theme.textSecondary)
+                        }
+                    }
+
+                    Toggle(isOn: $geminiEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gemini AI Fallback")
+                            Text("Used when SlipOK can't read a slip")
+                                .font(.caption)
                                 .foregroundColor(theme.textSecondary)
                         }
                     }
