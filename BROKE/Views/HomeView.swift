@@ -90,9 +90,14 @@ struct HomeView: View {
                         slipBanner
                     }
                     lazyTransactionList
-                        .padding(.bottom, 100)
+                        .padding(.bottom, 80)
                 }
                 .coordinateSpace(name: "homeContent")
+            }
+            // Reserve space equal to the sticky header height so it never covers a row
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: showStickyHeader ? 52 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showStickyHeader)
             }
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 geo.contentOffset.y

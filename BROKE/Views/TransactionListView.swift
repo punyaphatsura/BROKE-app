@@ -31,50 +31,47 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack {
-                if customTransactions == nil {
-                    Picker("Filter", selection: $filterType) {
-                        Text("All").tag(nil as TransactionType?)
-                        Text("Income").tag(TransactionType.income as TransactionType?)
-                        Text("Expense").tag(TransactionType.expense as TransactionType?)
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding(.horizontal)
+        VStack {
+            if customTransactions == nil {
+                Picker("Filter", selection: $filterType) {
+                    Text("All").tag(nil as TransactionType?)
+                    Text("Income").tag(TransactionType.income as TransactionType?)
+                    Text("Expense").tag(TransactionType.expense as TransactionType?)
                 }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding(.horizontal)
+            }
 
-                List {
-                    ForEach(groupedTransactions, id: \.key) { section in
-                        Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
-                            ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
-                                TransactionRow(transaction: transaction)
-                                    .listRowBackground(theme.cardBackground)
-                            }
-                            .onDelete { indexSet in
-                                deleteTransactions(at: indexSet, in: section.value)
-                            }
+            List {
+                ForEach(groupedTransactions, id: \.key) { section in
+                    Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
+                        ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
+                            TransactionRow(transaction: transaction)
+                                .listRowBackground(theme.cardBackground)
                         }
-                    }
-                }
-                .listStyle(InsetGroupedListStyle())
-                .scrollContentBackground(.hidden)
-                .background(theme.background)
-            }
-            .background(theme.background.ignoresSafeArea())
-            .toolbar {
-                if customTransactions == nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            showingAddTransaction = true
-                        }) {
-                            Image(systemName: "plus")
+                        .onDelete { indexSet in
+                            deleteTransactions(at: indexSet, in: section.value)
                         }
                     }
                 }
             }
-            .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionView()
+            .listStyle(InsetGroupedListStyle())
+            .scrollContentBackground(.hidden)
+            .background(theme.background)
+            .contentMargins(.bottom, 90, for: .scrollContent)
+        }
+        .background(theme.background.ignoresSafeArea())
+        .toolbar {
+            if customTransactions == nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingAddTransaction = true }) {
+                        Image(systemName: "plus")
+                    }
+                }
             }
+        }
+        .sheet(isPresented: $showingAddTransaction) {
+            AddTransactionView()
         }
     }
 

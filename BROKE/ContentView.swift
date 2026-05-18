@@ -6,25 +6,24 @@ struct ContentView: View {
     @EnvironmentObject var theme: ThemeManager
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
-                HomeView()
-                    .tag(0)
+        TabView(selection: $selectedTab) {
+            HomeView()
+                .tag(0)
 
-                NavigationStack {
-                    AnalyticsView()
-                }
-                .tag(1)
-
-                SettingsView()
-                    .tag(2)
+            NavigationStack {
+                AnalyticsView()
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .ignoresSafeArea()
-            .preferredColorScheme(theme.preferredColorScheme)
+            .tag(1)
 
+            SettingsView()
+                .tag(2)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .ignoresSafeArea(.container, edges: .bottom)  // top safe area respected; bottom ignored for full-bleed
+        .preferredColorScheme(theme.preferredColorScheme)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             BottomTabBar(selectedTab: $selectedTab)
-                .padding(.bottom, 24)
+                .padding(.bottom, 8)
         }
         .background(theme.background.ignoresSafeArea())
         .tint(theme.primary)
