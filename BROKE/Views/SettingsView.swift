@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("lastScannedDate") private var lastScannedDate: Date?
     @AppStorage("userName") private var userName: String = ""
     @AppStorage("geminiEnabled") private var geminiEnabled: Bool = true
+    @AppStorage("confirmedSlipsCount") private var confirmedSlipsCount: Int = 0
     @State private var isRequestingAccess = false
     @State private var isImportingFile = false
     @State private var exportedFileURL: URL?
@@ -25,9 +26,67 @@ struct SettingsView: View {
         return formatter
     }
 
+    private var memberSinceString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM yyyy"
+        let date = UserDefaults.standard.object(forKey: "firstLaunchDate") as? Date ?? Date()
+        return formatter.string(from: date)
+    }
+
+    private var profileHeroCard: some View {
+        ZStack(alignment: .topTrailing) {
+            // Mascot in corner
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.white.opacity(0.18))
+                    .frame(width: 90, height: 90)
+                    .rotationEffect(.degrees(-8))
+                MascotView(size: 62, mood: .sleepy)
+                    .rotationEffect(.degrees(-8))
+            }
+            .offset(x: -8, y: -8)
+
+            // Text content
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Member since \(memberSinceString)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.cardBackground.opacity(0.85))
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+
+                Text(userName.isEmpty ? "Your Profile" : userName)
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.cardBackground)
+                    .lineLimit(1)
+
+                Text(theme.character == .penguin
+                     ? "❤️ \(confirmedSlipsCount) slips caught by the penguin"
+                     : "🔥 \(confirmedSlipsCount) slips sniffed by the dragon")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(theme.cardBackground.opacity(0.9))
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(theme.primary)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    profileHeroCard
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+
                 Section(header: Text("Profile")) {
                     HStack {
                         Text("Name")
