@@ -9,6 +9,13 @@ import Photos
 import PhotosUI
 import SwiftUI
 
+private enum TransactionContentPositionKey: PreferenceKey {
+    static var defaultValue: [UUID: CGFloat] = [:]
+    static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 struct HomeView: View {
     @EnvironmentObject var transactionStore: TransactionStore
     @EnvironmentObject var photoService: PhotoService
@@ -19,6 +26,13 @@ struct HomeView: View {
     @State private var newSlipsCount: Int = 0
     @State private var showingQuotaAlert = false
     @State private var isLastBatchExpanded: Bool = false
+    @State private var showingSlipReview = false
+    @State private var showStickyHeader = false
+    @State private var stickyDate: Date = Date()
+    @State private var stickyExpense: Double = 0
+    @State private var stickyIncome: Double = 0
+    @State private var transactionContentPositions: [UUID: CGFloat] = [:]
+    @State private var scrollOffset: CGFloat = 0
     @EnvironmentObject var theme: ThemeManager
 
     // Computed properties for counts
@@ -37,28 +51,76 @@ struct HomeView: View {
         return grouped.sorted { $0.key > $1.key }
     }
 
+    // Ordered list of all transactions as displayed (date desc, then time desc within day)
+    private var orderedTransactions: [Transaction] {
+        groupedTransactions.flatMap { $0.value.sorted { $0.date > $1.date } }
+    }
+
+    // For each transaction: running total of expense+income from that row DOWN to the last row
+    private var cumulativeFromTransactionDown: [UUID: (expense: Double, income: Double)] {
+        var cumExpense = 0.0
+        var cumIncome = 0.0
+        var result = [UUID: (expense: Double, income: Double)]()
+        for txn in orderedTransactions.reversed() {
+            if txn.type == .expense { cumExpense += txn.amount }
+            else if txn.type == .income { cumIncome += txn.amount }
+            result[txn.id] = (cumExpense, cumIncome)
+        }
+        return result
+    }
+
+    // Maps transaction ID → its section date (for the sticky header date label)
+    private var transactionSectionDate: [UUID: Date] {
+        var result = [UUID: Date]()
+        for section in groupedTransactions {
+            for txn in section.value { result[txn.id] = section.key }
+        }
+        return result
+    }
+
     var body: some View {
-        NavigationView {
-            VStack {
-                lastBatchScannedView
+        ZStack(alignment: .top) {
+            theme.background.ignoresSafeArea()
 
-                monthNavigation
-
-                summaryView
-
-                transactionList
-
-                Spacer()
+            ScrollView {
+                VStack(spacing: 0) {
+                    characterHeader
+                    heroBalanceCard
+                    if !viewModel.recentScannedTransactions.isEmpty {
+                        slipBanner
+                    }
+                    lazyTransactionList
+                        .padding(.bottom, 80)
+                }
+                .coordinateSpace(name: "homeContent")
             }
-            .background(theme.background.ignoresSafeArea())
-            .toolbar {
-                toolbarContent
+            // Reserve space equal to the sticky header height so it never covers a row
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: showStickyHeader ? 52 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showStickyHeader)
             }
+            .onScrollGeometryChange(for: CGFloat.self) { geo in
+                geo.contentOffset.y
+            } action: { _, newOffset in
+                scrollOffset = newOffset
+                updateStickyHeaderFromPositions()
+            }
+            .onPreferenceChange(TransactionContentPositionKey.self) { positions in
+                for (id, y) in positions { transactionContentPositions[id] = y }
+                updateStickyHeaderFromPositions()
+            }
+            .refreshable { await refreshData() }
             .sheet(isPresented: $viewModel.showingAddTransaction) {
-                AddTransactionView() // Manual add
+                AddTransactionView()
             }
             .sheet(item: $viewModel.selectedTransactionForReview) { transaction in
                 AddTransactionView(transactionToEdit: transaction)
+            }
+            .sheet(isPresented: $showingSlipReview) {
+                SlipReviewView()
+                    .environmentObject(transactionStore)
+                    .environmentObject(photoService)
+                    .environmentObject(theme)
             }
             .alert("Limit Exceeded", isPresented: $showingQuotaAlert) {
                 Button("OK", role: .cancel) {}
@@ -66,200 +128,201 @@ struct HomeView: View {
                 Text("The daily limit for Gemini API has been reached. Please try again later.")
             }
             .onReceive(photoService.$isLoadingComplete) { isComplete in
-                if isComplete {
-                    triggerBatchScan()
-                }
+                if isComplete { triggerBatchScan() }
             }
             .onReceive(scannerViewModel.$processedSlipData) { slipData in
-                if let slipData = slipData {
-                    saveTransactionFromSlip(slipData)
-                }
+                if let slipData { saveTransactionFromSlip(slipData) }
             }
             .onReceive(scannerViewModel.$errorMessage) { error in
-                // Check for quota error in message if it bubbles up here,
-                // but ideally we check the flag from VM if exposed or just string match
-                if let error = error, error.contains("quota") || error.contains("429") || error.contains("RESOURCE_EXHAUSTED") {
+                if let error, error.contains("quota") || error.contains("429") || error.contains("RESOURCE_EXHAUSTED") {
                     showingQuotaAlert = true
-                } else if let error = error, !error.isEmpty {
-                    // Show other errors if needed, or handle them elsewhere
-                    print("Scanner Error: \(error)")
                 }
             }
             .onAppear {
                 updateTransactionsList()
                 if newSlipsCount == 0 && unprocessedCount > 0 {
-                    self.newSlipsCount = unprocessedCount
+                    newSlipsCount = unprocessedCount
                 }
             }
-            .onChange(of: viewModel.currentMonth) { _ in updateTransactionsList() }
-            .onChange(of: viewModel.currentYear) { _ in updateTransactionsList() }
+            .onChange(of: viewModel.currentMonth) { updateTransactionsList() }
+            .onChange(of: viewModel.currentYear) { updateTransactionsList() }
+
+            // Sticky cumulative header overlay
+            if showStickyHeader {
+                StickyScrollHeader(
+                    date: stickyDate,
+                    cumulativeExpense: stickyExpense,
+                    cumulativeIncome: stickyIncome
+                )
+                .transition(.opacity)
+            }
         }
     }
 
     // MARK: - Subviews
 
-    private var lastBatchScannedView: some View {
-        Group {
-            if !viewModel.recentScannedTransactions.isEmpty {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Button(action: {
-                            withAnimation {
-                                isLastBatchExpanded.toggle()
-                            }
-                        }) {
-                            HStack {
-                                Text("Last Scanned Batch (\(viewModel.recentScannedTransactions.count)/\(newSlipsCount))")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                Image(systemName: isLastBatchExpanded ? "chevron.down" : "chevron.right")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.horizontal)
+    private var characterHeader: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.primary.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                MascotView(size: 30, mood: .happy)
+            }
 
-                        Spacer()
-                        statisticsSection
-                    }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Hi, there.")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                Text(viewModel.monthYearString)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+            }
 
-                    if isLastBatchExpanded {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(viewModel.recentScannedTransactions) { transaction in
-                                    TransactionThumbnailView(transaction: transaction)
-                                        .onTapGesture {
-                                            viewModel.selectedTransactionForReview = transaction
-                                        }
+            Spacer()
+
+            HStack(spacing: 0) {
+                Button(action: viewModel.previousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                        .frame(width: 32, height: 32)
+                }
+                Button(action: viewModel.nextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                        .frame(width: 32, height: 32)
+                }
+                .disabled(viewModel.isCurrentMonthAndYear)
+            }
+
+            Button(action: { viewModel.showingAddTransaction = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.cardBackground)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(theme.primary)
+                    )
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 18)
+    }
+
+    private var heroBalanceCard: some View {
+        ZStack(alignment: .topTrailing) {
+            Circle()
+                .fill(Color.white.opacity(0.16))
+                .frame(width: 140, height: 140)
+                .offset(x: 30, y: -30)
+            Circle()
+                .fill(Color.white.opacity(0.10))
+                .frame(width: 60, height: 60)
+                .offset(x: -20, y: 30)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("NET THIS MONTH")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundColor(theme.cardBackground.opacity(0.85))
+
+                let net = transactionStore.totalIncome() - transactionStore.totalExpense()
+                Text((net < 0 ? "−" : "") + "฿" + String(format: "%.0f", abs(net)))
+                    .font(.system(size: 52, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.cardBackground)
+                    .padding(.top, 10)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                HStack(spacing: 8) {
+                    HeroStatPill(label: "IN",  amount: transactionStore.totalIncome(),  textColor: theme.cardBackground)
+                    HeroStatPill(label: "OUT", amount: transactionStore.totalExpense(), textColor: theme.cardBackground)
+                }
+                .padding(.top, 14)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 28)
+                .fill(theme.primary)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+    }
+
+    private var slipBanner: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.primary.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                MascotView(size: 30, mood: .alert)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(theme.character == .penguin
+                     ? "I caught \(viewModel.recentScannedTransactions.count) slips!"
+                     : "Rawr! Found \(viewModel.recentScannedTransactions.count) slips!")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Text("Tap Scan to review and file them")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(theme.cardBackground)
+                .shadow(color: theme.textPrimary.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .onTapGesture { showingSlipReview = true }
+    }
+
+    private var lazyTransactionList: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(groupedTransactions, id: \.key) { section in
+                TransactionSectionHeader(date: section.key, transactions: section.value)
+                    .background(theme.background)
+
+                VStack(spacing: 0) {
+                    let sorted = section.value.sorted(by: { $0.date > $1.date })
+                    ForEach(sorted) { transaction in
+                        TransactionRow(transaction: transaction)
+                            .padding(.horizontal, 16)
+                            .background(
+                                GeometryReader { geo in
+                                    Color(theme.cardBackground).preference(
+                                        key: TransactionContentPositionKey.self,
+                                        value: [transaction.id: geo.frame(in: .named("homeContent")).minY]
+                                    )
                                 }
-                            }
-                            .padding(.horizontal)
+                            )
+                        if transaction.id != sorted.last?.id {
+                            Divider()
+                                .padding(.leading, 72)
+                                .padding(.horizontal, 16)
                         }
                     }
                 }
-                .padding(.vertical, 10)
-            }
-        }
-    }
-
-    private var monthNavigation: some View {
-        HStack {
-            Button(action: viewModel.previousMonth) {
-                Image(systemName: "chevron.left")
-                    .padding()
-            }
-
-            Text(viewModel.monthYearString)
-                .font(.title2)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity)
-
-            Button(action: viewModel.nextMonth) {
-                Image(systemName: "chevron.right")
-                    .padding()
-            }
-            .disabled(viewModel.isCurrentMonthAndYear)
-        }
-        .padding(.horizontal)
-    }
-
-    private var summaryView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .center) {
-                Text("Income")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                Text(transactionStore.totalIncome().formattedCurrency)
-                    .font(.headline)
-                    .foregroundColor(theme.income)
-            }
-            .frame(maxWidth: .infinity)
-
-            VStack(alignment: .center) {
-                Text("Expense")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                Text(transactionStore.totalExpense().formattedCurrency)
-                    .font(.headline)
-                    .foregroundColor(theme.expense)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 12)
-        .background(theme.cardBackground)
-        .cornerRadius(12)
-        .padding(.horizontal)
-        .padding(.bottom, 4)
-    }
-
-    private var transactionList: some View {
-        VStack(alignment: .leading) {
-            List {
-                ForEach(groupedTransactions, id: \.key) { section in
-                    Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
-                        ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
-                            TransactionRow(transaction: transaction)
-                                .listRowBackground(theme.cardBackground)
-                        }
-                    }
-                }
-            }
-            .listStyle(InsetGroupedListStyle())
-            .scrollContentBackground(.hidden)
-            .background(theme.background)
-            .refreshable {
-                await refreshData()
-            }
-        }
-    }
-
-    private var statisticsSection: some View {
-        Group {
-            if !photoService.assets.isEmpty {
-                HStack(spacing: 12) {
-                    if scannerViewModel.isProcessing {
-                        processingIndicator
-                    } else if unprocessedCount > 0 {
-                        scanButton
-                    }
-                }
-                .padding(.trailing, 16)
-            }
-        }
-    }
-
-    private var processingIndicator: some View {
-        HStack {
-            ProgressView()
-                .padding(.trailing, 5)
-        }
-        .padding(.vertical, 5)
-    }
-
-    private var scanButton: some View {
-        Button(action: {
-            triggerBatchScan()
-        }) {
-            HStack {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                Text("Scan Remaining (\(unprocessedCount))")
-            }
-            .font(.caption.weight(.medium))
-            .foregroundColor(.white)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .background(theme.primary)
-            .cornerRadius(15)
-        }
-    }
-
-    private var toolbarContent: some ToolbarContent {
-        Group {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    viewModel.showingAddTransaction = true
-                }) {
-                    Image(systemName: "plus")
-                }
+                .background(theme.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
         }
     }
@@ -290,14 +353,12 @@ struct HomeView: View {
     }
 
     private func triggerBatchScan() {
-        print("Starting batch scan...")
         // Only reset if we are starting a fresh batch
         if unprocessedCount > 0 {
             // Set the fixed count for this batch
             newSlipsCount = viewModel.recentScannedTransactions.count + unprocessedCount
         }
         scannerViewModel.processBatch(assets: photoService.assets) { count in
-            print("Batch processed: \(count) assets")
         }
     }
 
@@ -309,6 +370,119 @@ struct HomeView: View {
         await MainActor.run {
             triggerBatchScan()
             updateTransactionsList()
+        }
+    }
+
+    private func updateStickyHeaderFromPositions() {
+        guard scrollOffset > 0 else {
+            withAnimation(.easeInOut(duration: 0.15)) { showStickyHeader = false }
+            return
+        }
+        guard !transactionContentPositions.isEmpty else { return }
+
+        // Transaction positions include the section header height (~55pt) above each
+        // section's first row. Subtracting that offset makes the accumulation update
+        // when the section header leaves the screen — matching the timing users expect.
+        let candidate = transactionContentPositions
+            .filter { $0.value >= scrollOffset + 55 }
+            .min { $0.value < $1.value }
+            ?? transactionContentPositions.max { $0.value < $1.value }
+
+        guard let (txnId, _) = candidate else { return }
+
+        let cumulative = cumulativeFromTransactionDown
+        let sectionDates = transactionSectionDate
+        let data = cumulative[txnId]
+        let date = sectionDates[txnId] ?? stickyDate
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showStickyHeader = true
+            stickyDate = date
+            stickyExpense = data?.expense ?? 0
+            stickyIncome = data?.income ?? 0
+        }
+    }
+}
+
+private struct HeroStatPill: View {
+    let label: String
+    let amount: Double
+    let textColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.5)
+                .foregroundColor(textColor.opacity(0.85))
+            Text("฿" + String(format: "%.0f", amount))
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundColor(textColor)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .background(Color.white.opacity(0.18))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StickyScrollHeader: View {
+    let date: Date
+    let cumulativeExpense: Double
+    let cumulativeIncome: Double
+    @EnvironmentObject var theme: ThemeManager
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(date, format: .dateTime.weekday(.abbreviated))
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .textCase(.uppercase)
+                        .foregroundColor(theme.textSecondary)
+                    Text(date, format: .dateTime.day().month(.abbreviated))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 14) {
+                    if cumulativeIncome > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.left")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.income)
+                            Text(cumulativeIncome.formattedCurrency)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.income)
+                                .contentTransition(.numericText())
+                                .animation(.easeInOut(duration: 0.25), value: cumulativeIncome)
+                        }
+                    }
+                    if cumulativeExpense > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.expense)
+                            Text(cumulativeExpense.formattedCurrency)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.expense)
+                                .contentTransition(.numericText(countsDown: true))
+                                .animation(.easeInOut(duration: 0.25), value: cumulativeExpense)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(theme.background.opacity(0.97))
+
+            Rectangle()
+                .fill(theme.separator)
+                .frame(height: 0.5)
         }
     }
 }

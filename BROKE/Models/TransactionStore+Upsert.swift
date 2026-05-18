@@ -12,7 +12,6 @@ extension TransactionStore {
         // Prepare the new transaction data
         guard let amount = slipData.parsedAmount,
               let date = slipData.parsedDate else {
-            print("Skipping invalid slip data: \(slipData)")
             return
         }
         
@@ -21,7 +20,6 @@ extension TransactionStore {
         // Check if transaction with this refId already exists
         if let refId = refId, let index = transactions.firstIndex(where: { $0.refId == refId }) {
             // Update existing
-            print("Updating existing transaction with refId: \(refId)")
             var transaction = transactions[index]
             transaction.amount = amount
             transaction.date = date
@@ -32,7 +30,6 @@ extension TransactionStore {
             updateTransaction(transaction)
         } else {
             // Create new
-            print("Creating new transaction for refId: \(refId ?? "nil")")
             // Determine Type
             var type: TransactionType = .expense
             if let hint = slipData.typeHint {

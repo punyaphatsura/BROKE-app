@@ -12,7 +12,7 @@ struct TransactionRow: View {
     @State private var showingEditSheet = false
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             if transaction.type == .expense {
                 if let categoryId = transaction.categoryId,
                    let category = ExpenseCategory(rawValue: categoryId.rawValue) {
@@ -29,7 +29,8 @@ struct TransactionRow: View {
                     } label: {
                         Image(systemName: category.icon)
                             .foregroundColor(category.color)
-                            .font(.title)
+                            .font(.system(size: 26))
+                            .frame(width: 36, alignment: .center)
                     }
                 }
             } else if transaction.type == .income {
@@ -48,13 +49,15 @@ struct TransactionRow: View {
                     } label: {
                         Image(systemName: category.icon)
                             .foregroundColor(category.color)
-                            .font(.title)
+                            .font(.system(size: 26))
+                            .frame(width: 36, alignment: .center)
                     }
                 }
             } else {
                 Image(systemName: "arrow.left.arrow.right")
                     .foregroundColor(theme.primary)
-                    .font(.title)
+                    .font(.system(size: 26))
+                    .frame(width: 36)
             }
 
             VStack(alignment: .leading) {
@@ -97,7 +100,7 @@ struct TransactionRow: View {
                     theme.textPrimary
                 )
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 10)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 transactionStore.deleteTransactionById(transaction.id)

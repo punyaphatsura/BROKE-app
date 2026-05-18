@@ -31,50 +31,47 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack {
-                if customTransactions == nil {
-                    Picker("Filter", selection: $filterType) {
-                        Text("All").tag(nil as TransactionType?)
-                        Text("Income").tag(TransactionType.income as TransactionType?)
-                        Text("Expense").tag(TransactionType.expense as TransactionType?)
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding(.horizontal)
+        VStack {
+            if customTransactions == nil {
+                Picker("Filter", selection: $filterType) {
+                    Text("All").tag(nil as TransactionType?)
+                    Text("Income").tag(TransactionType.income as TransactionType?)
+                    Text("Expense").tag(TransactionType.expense as TransactionType?)
                 }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding(.horizontal)
+            }
 
-                List {
-                    ForEach(groupedTransactions, id: \.key) { section in
-                        Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
-                            ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
-                                TransactionRow(transaction: transaction)
-                                    .listRowBackground(theme.cardBackground)
-                            }
-                            .onDelete { indexSet in
-                                deleteTransactions(at: indexSet, in: section.value)
-                            }
+            List {
+                ForEach(groupedTransactions, id: \.key) { section in
+                    Section(header: TransactionSectionHeader(date: section.key, transactions: section.value)) {
+                        ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
+                            TransactionRow(transaction: transaction)
+                                .listRowBackground(theme.cardBackground)
                         }
-                    }
-                }
-                .listStyle(InsetGroupedListStyle())
-                .scrollContentBackground(.hidden)
-                .background(theme.background)
-            }
-            .background(theme.background.ignoresSafeArea())
-            .toolbar {
-                if customTransactions == nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            showingAddTransaction = true
-                        }) {
-                            Image(systemName: "plus")
+                        .onDelete { indexSet in
+                            deleteTransactions(at: indexSet, in: section.value)
                         }
                     }
                 }
             }
-            .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionView()
+            .listStyle(InsetGroupedListStyle())
+            .scrollContentBackground(.hidden)
+            .background(theme.background)
+            .contentMargins(.bottom, 90, for: .scrollContent)
+        }
+        .background(theme.background.ignoresSafeArea())
+        .toolbar {
+            if customTransactions == nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingAddTransaction = true }) {
+                        Image(systemName: "plus")
+                    }
+                }
             }
+        }
+        .sheet(isPresented: $showingAddTransaction) {
+            AddTransactionView()
         }
     }
 
@@ -103,49 +100,45 @@ struct TransactionSectionHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .center, spacing: 0) {
                 Text(date, format: .dateTime.weekday(.abbreviated))
-                    .font(.caption)
-                    .fontWeight(.bold)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.5)
                     .textCase(.uppercase)
-
+                    .foregroundColor(theme.textSecondary)
                 Text(date, format: .dateTime.day())
-                    .font(.title3)
-                    .fontWeight(.bold)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
             }
-            .foregroundColor(theme.textPrimary)
-            .frame(width: 50)
+            .frame(width: 44)
 
             Spacer()
 
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 14) {
                 if income > 0 {
-                    HStack {
-                        Spacer()
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.down.left")
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.income)
                         Text(income.formattedCurrency)
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.income)
                     }
-                    .frame(maxWidth: .infinity)
                 }
-
                 if expense > 0 {
-                    HStack {
-                        Spacer()
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(theme.expense)
                         Text(expense.formattedCurrency)
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.expense)
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(minWidth: 120)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
     }
 }

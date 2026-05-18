@@ -111,6 +111,7 @@ struct AnalyticsView: View {
                         transactions: currentMonthTransactions,
                         avgExpense: averageMonthlyExpense3Months
                     )
+                    MascotInsightPill(transactions: currentMonthTransactions)
                 }
                 
                 // 7) Monthly Comparison Chart (Last 4 Months)
@@ -786,6 +787,53 @@ struct AnalyticsView_Previews: PreviewProvider {
         AnalyticsView()
             .environmentObject(TransactionStore())
             .environmentObject(ThemeManager())
+    }
+}
+
+private struct MascotInsightPill: View {
+    let transactions: [Transaction]
+    @EnvironmentObject var theme: ThemeManager
+
+    private var insight: String {
+        let calendar = Calendar.current
+        let weekendTotal = transactions
+            .filter { $0.type == .expense }
+            .filter {
+                let wd = calendar.component(.weekday, from: $0.date)
+                return wd == 1 || wd == 7
+            }
+            .reduce(0.0) { $0 + $1.amount }
+        let total = transactions.filter { $0.type == .expense }.reduce(0.0) { $0 + $1.amount }
+        guard total > 0 else { return "Looking good this month!" }
+        let pct = Int((weekendTotal / total) * 100)
+        if pct > 40 {
+            return "\(pct)% of spending lands on weekends. Weekdays are your savings days."
+        } else if pct < 20 {
+            return "You're a weekday spender. Treat yourself a little on weekends!"
+        }
+        return "Your spending is evenly spread through the week."
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MascotView(size: 28, mood: .sleepy)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.primary.opacity(0.15))
+                )
+            Text(insight)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+                .lineSpacing(2)
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.primary.opacity(0.10))
+        )
+        .padding(.horizontal, 20)
     }
 }
 

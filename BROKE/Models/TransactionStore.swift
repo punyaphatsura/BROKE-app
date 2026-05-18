@@ -78,7 +78,6 @@ class TransactionStore: ObservableObject {
             let data = try JSONDecoder().decode([Transaction].self, from: data)
             return data
         } catch {
-            print("Error loading transactions: \(error)")
             return []
         }
     }
@@ -100,7 +99,6 @@ class TransactionStore: ObservableObject {
             let data = try JSONEncoder().encode(allTransactions)
             UserDefaults.standard.set(data, forKey: saveKey)
         } catch {
-            print("Error saving transactions: \(error)")
         }
     }
     

@@ -1,10 +1,4 @@
-//
-//  ContentView.swift
-//  BROKE
-//
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
-
+// BROKE/ContentView.swift
 import SwiftUI
 
 struct ContentView: View {
@@ -14,28 +8,25 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             HomeView()
-                .tabItem {
-                    Label("Home", systemImage: "house")
-                }
                 .tag(0)
 
             NavigationStack {
                 AnalyticsView()
             }
-            .tabItem {
-                Label("Analytics", systemImage: "chart.pie.fill")
-            }
             .tag(1)
 
             SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
                 .tag(2)
         }
-        .tint(theme.primary)
-        .ignoresSafeArea()
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .ignoresSafeArea(.container, edges: .bottom)  // top safe area respected; bottom ignored for full-bleed
         .preferredColorScheme(theme.preferredColorScheme)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            BottomTabBar(selectedTab: $selectedTab)
+                .padding(.bottom, 8)
+        }
+        .background(theme.background.ignoresSafeArea())
+        .tint(theme.primary)
     }
 }
 
