@@ -98,11 +98,60 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("Appearance")) {
-                    Picker("Theme", selection: $theme.character) {
-                        Label("Penguin", systemImage: "snowflake")
-                            .tag(ThemeCharacter.penguin)
-                        Label("Dragon", systemImage: "flame")
-                            .tag(ThemeCharacter.dragon)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Buddy")
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+
+                        HStack(spacing: 12) {
+                            ForEach([ThemeCharacter.penguin, ThemeCharacter.dragon], id: \.self) { character in
+                                let isActive = theme.character == character
+                                Button(action: { theme.character = character }) {
+                                    VStack(spacing: 8) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(isActive ? theme.primary.opacity(0.15) : theme.separator.opacity(0.4))
+                                                .frame(width: 52, height: 52)
+                                            Image(systemName: character == .penguin ? "snowflake" : "flame")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(isActive ? theme.primary : theme.textSecondary)
+                                        }
+
+                                        Text(character == .penguin ? "Penguin" : "Dragon")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(isActive ? theme.primary : theme.textPrimary)
+
+                                        Text(character == .penguin ? "Cool & calm" : "Bold & toasty")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(theme.textSecondary)
+
+                                        if isActive {
+                                            Text("✓ Active")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(theme.primary)
+                                        } else {
+                                            Text("Tap to switch")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(theme.textSecondary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 18)
+                                            .fill(isActive ? theme.primary.opacity(0.08) : Color.clear)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 18)
+                                                    .stroke(
+                                                        isActive ? theme.primary : theme.primary.opacity(0.15),
+                                                        lineWidth: isActive ? 2 : 1
+                                                    )
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
 
                     Picker("Mode", selection: $theme.appearance) {
