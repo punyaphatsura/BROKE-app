@@ -12,6 +12,20 @@ import SwiftUI
 @MainActor
 class SettingsViewModel: ObservableObject {
     @Published var slipOKQuota: Int?
+
+    private let slipOKTotalQuota = 5_000
+
+    var slipOKUsedCount: Int {
+        guard let remaining = slipOKQuota else { return 0 }
+        return max(0, slipOKTotalQuota - remaining)
+    }
+
+    var slipOKUsagePercent: Int {
+        guard let remaining = slipOKQuota else { return 0 }
+        let used = max(0, slipOKTotalQuota - remaining)
+        return Int((Double(used) / Double(slipOKTotalQuota)) * 100)
+    }
+
     @Published var isLoadingQuota = false
     @Published var isImporting = false
     @Published var importMessage: String?

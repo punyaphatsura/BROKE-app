@@ -73,15 +73,20 @@ struct SettingsView: View {
 
                 Section(header: Text("SlipOK API")) {
                     HStack {
-                        Text("Remaining Quota")
+                        Text("Quota Used")
                         Spacer()
                         if viewModel.isLoadingQuota {
                             ProgressView()
-                        } else if let quota = viewModel.slipOKQuota {
-                            Text("\(quota)")
-                                .foregroundColor(quota < 10 ? theme.expense : theme.textPrimary)
+                        } else if viewModel.slipOKQuota != nil {
+                            Text("\(viewModel.slipOKUsedCount) / 5,000 used — \(viewModel.slipOKUsagePercent)%")
+                                .foregroundColor(
+                                    viewModel.slipOKUsagePercent >= 80
+                                        ? theme.expense
+                                        : theme.textPrimary
+                                )
                         } else {
-                            Text("-")
+                            Text("—")
+                                .foregroundColor(theme.textSecondary)
                         }
                     }
 
