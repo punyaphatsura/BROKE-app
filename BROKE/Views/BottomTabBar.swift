@@ -14,7 +14,7 @@ struct BottomTabBar: View {
 
     private let items: [TabItem] = [
         TabItem(tag: 0, label: "Home",     icon: "house",            iconFilled: "house.fill"),
-        TabItem(tag: 1, label: "Scan",     icon: "doc.viewfinder",   iconFilled: "doc.viewfinder.fill"),
+        TabItem(tag: 1, label: "Slips",    icon: "doc.viewfinder",   iconFilled: "doc.viewfinder.fill"),
         TabItem(tag: 2, label: "Insights", icon: "chart.pie",        iconFilled: "chart.pie.fill"),
         TabItem(tag: 3, label: "Me",       icon: "person",           iconFilled: "person.fill"),
     ]

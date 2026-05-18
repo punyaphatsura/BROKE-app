@@ -46,7 +46,7 @@ class SlipScannerViewModel: NSObject, ObservableObject {
         errorMessage = nil
         processedSlipData = nil
 
-        slipExtractor.processSlip(image: image) { [weak self] slipData in
+        slipExtractor.processSlip(image: image, geminiEnabled: geminiEnabled) { [weak self] slipData in
             DispatchQueue.main.async {
                 self?.isProcessing = false
 
