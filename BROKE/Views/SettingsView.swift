@@ -2,8 +2,6 @@
 //  SettingsView.swift
 //  BROKE
 //
-//  Created by Punyaphat Surakiatkamjorn on 20/4/2568 BE.
-//
 
 import PhotosUI
 import SwiftUI
@@ -11,6 +9,7 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @EnvironmentObject var transactionStore: TransactionStore
+    @EnvironmentObject var theme: ThemeManager
     @AppStorage("lastScannedDate") private var lastScannedDate: Date?
     @State private var isRequestingAccess = false
     @State private var isImportingFile = false
@@ -27,6 +26,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("Appearance")) {
+                    Picker("Theme", selection: $theme.character) {
+                        Label("Penguin", systemImage: "snowflake")
+                            .tag(ThemeCharacter.penguin)
+                        Label("Dragon", systemImage: "flame")
+                            .tag(ThemeCharacter.dragon)
+                    }
+
+                    Picker("Mode", selection: $theme.appearance) {
+                        Label("Light", systemImage: "sun.max")
+                            .tag(AppearanceMode.light)
+                        Label("Dark", systemImage: "moon")
+                            .tag(AppearanceMode.dark)
+                        Label("System", systemImage: "circle.lefthalf.filled")
+                            .tag(AppearanceMode.system)
+                    }
+                }
+
                 Section(header: Text("Photo Library Access")) {
                     Button("Request Photo Access") {
                         isRequestingAccess = true
@@ -51,7 +68,7 @@ struct SettingsView: View {
                             ProgressView()
                         } else if let quota = viewModel.slipOKQuota {
                             Text("\(quota)")
-                                .foregroundColor(quota < 10 ? .red : .primary)
+                                .foregroundColor(quota < 10 ? theme.expense : theme.textPrimary)
                         } else {
                             Text("-")
                         }
@@ -60,7 +77,7 @@ struct SettingsView: View {
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(theme.expense)
                     }
 
                     Button("Refresh Quota") {
@@ -84,7 +101,7 @@ struct SettingsView: View {
                     if let msg = viewModel.importMessage, !viewModel.isImporting {
                         Text(msg)
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(theme.income)
                     }
 
                     Button("Export to CSV") {
@@ -102,11 +119,17 @@ struct SettingsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(theme.background.ignoresSafeArea())
             .navigationTitle("Settings")
             .onAppear {
                 viewModel.fetchQuota()
             }
-            .fileImporter(isPresented: $isImportingFile, allowedContentTypes: [.commaSeparatedText, .plainText], allowsMultipleSelection: false) { result in
+            .fileImporter(
+                isPresented: $isImportingFile,
+                allowedContentTypes: [.commaSeparatedText, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
                 switch result {
                 case let .success(urls):
                     if let url = urls.first {

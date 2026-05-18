@@ -10,6 +10,7 @@ import SwiftUI
 
 struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var theme: ThemeManager
     @EnvironmentObject var transactionStore: TransactionStore
 
     let slipData: SlipData?
@@ -29,32 +30,268 @@ struct AddTransactionView: View {
 
     @State private var isShowSlip: Bool = false
     @State private var showZoom: Bool = false // <- swap to zoom view AFTER the matched-geometry animation
-    @State private var subTransactions: [SubTransaction] = []
-
+    @State private var draftSubTransactions: [DraftSubTransaction] = [DraftSubTransaction()]
+    
+    // Draft struct to handle text input
+    struct DraftSubTransaction: Identifiable {
+        let id = UUID()
+        var amount: String = ""
+        var category: ExpenseCategory = .others
+    }
+    
     // For custom date picker
     @State private var showDatePicker: Bool = false
 
     // For collapsing details
     @State private var showMoreDetails: Bool = false
 
-    @State private var newSubAmount: String = ""
-    @State private var newSubCategory: ExpenseCategory = .others
-
     @State private var subTransactionError: String? = nil
 
     @State private var isCategoryExpanded: Bool = false
-
     @FocusState private var focusedField: Field?
-
     @Namespace private var smoothImage
 
-    enum Field {
+    enum Field: Hashable {
         case amount
         case description
         case sender
         case receiver
         case refId
-        case subAmount
+        case subAmount(UUID) // Focus per row
+    }
+
+    // ... (init)
+
+    // ... (body) -> subTransactionsSection update
+
+    private var subTransactionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Sub Transactions")
+                    .font(.headline)
+                    .foregroundColor(theme.textSecondary)
+                Spacer()
+                
+                // Add Remaining Button
+                if remainingAmount > 0 {
+                    Button(action: addRemainingAmount) {
+                        Text("Add Remaining (\(remainingAmount.formattedCurrency))")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(theme.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(theme.primary.opacity(0.1))
+                            .cornerRadius(12)
+                    }
+                }
+            }
+            .padding(.horizontal)
+
+            VStack(spacing: 0) {
+                ForEach($draftSubTransactions) { $draft in
+                    HStack {
+                        // Amount Field
+                        TextField("Amount", text: $draft.amount)
+                            .textFieldStyle(.plain)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .subAmount(draft.id))
+                            .multilineTextAlignment(.trailing)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(theme.cardBackground.opacity(0.7))
+                            .cornerRadius(6)
+                            . onChange(of: draft.amount) { _ in
+                                handleDraftChange()
+                            }
+
+                        Spacer()
+
+                        // Category Menu (Icon Only)
+                        Menu {
+                            ForEach(ExpenseCategory.allCases) { category in
+                                Button(action: { draft.category = category }) {
+                                    Label(category.displayName, systemImage: category.icon)
+                                }
+                            }
+                        } label: {
+                            Image(systemName: draft.category.icon)
+                                .foregroundColor(draft.category.color)
+                                .font(.title2)
+                                .frame(width: 30, height: 30)
+                        }
+
+                        // Delete Button (only if not the only empty row, or just clearer to allow delete)
+                        Button(action: {
+                            deleteDraft(id: draft.id)
+                        }) {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.title3)
+                        }
+                        .padding(.leading, 8)
+                        // Don't allowing deleting the last single empty row if you want, or just re-add
+                    }
+                    .padding()
+
+                    if draft.id != draftSubTransactions.last?.id {
+                        Divider().padding(.leading)
+                    }
+                }
+                
+                // Validation Error
+                if let error = subTransactionError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .background(theme.cardBackground)
+            .cornerRadius(16)
+            .padding(.horizontal) // Matches prior styling
+            .padding(.bottom)
+        }
+    }
+    
+    // ... logic helpers
+    
+    private var remainingAmount: Double {
+        let total = Double(amount) ?? 0.0
+        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
+        return max(0, total - currentUsed)
+    }
+
+    private func handleDraftChange() {
+        // Clear error
+        subTransactionError = nil
+        
+        let mainTotal = Double(amount) ?? 0.0
+        let currentUsed = draftSubTransactions.reduce(0.0) { $0 + (Double($1.amount) ?? 0.0) }
+        
+        // 1. Cleanup: If we meet or exceed total, remove trailing empty row
+        if currentUsed >= mainTotal {
+             if let last = draftSubTransactions.last, last.amount.isEmpty {
+                 draftSubTransactions.removeLast()
+             }
+        }
+        
+        // 2. Append: If we have room, and the last row is Valid/Filled, append new
+        if currentUsed < mainTotal {
+             if let last = draftSubTransactions.last, let val = Double(last.amount), val > 0 {
+                  // Only append if last is not empty (already satisfied by val > 0)
+                  draftSubTransactions.append(DraftSubTransaction())
+             }
+        }
+        
+        // Error check
+        if currentUsed > mainTotal {
+             subTransactionError = "Exceeds total amount"
+        }
+    }
+    
+    private func addRemainingAmount() {
+        let remainder = remainingAmount
+        if remainder <= 0 { return }
+        
+        // If last row is empty, fill it. Else append.
+        if let idx = draftSubTransactions.indices.last, draftSubTransactions[idx].amount.isEmpty {
+            draftSubTransactions[idx].amount = String(remainder)
+        } else {
+            draftSubTransactions.append(DraftSubTransaction(amount: String(remainder)))
+        }
+    }
+    
+    private func deleteDraft(id: UUID) {
+        if let index = draftSubTransactions.firstIndex(where: { $0.id == id }) {
+            draftSubTransactions.remove(at: index)
+        }
+        // Ensure at least one empty row if list becomes empty?
+        if draftSubTransactions.isEmpty {
+            draftSubTransactions.append(DraftSubTransaction())
+        }
+    }
+
+    // ... update populate and save logic ... 
+    
+    private func populateFromTransaction(_ transaction: Transaction) {
+        // ... previous basic fields ...
+        amount = String(transaction.amount) // Need this first for total check
+        // ... (copy lines 639-648)
+        description = transaction.description
+        date = transaction.date
+        type = transaction.type
+        if let category = transaction.categoryId { selectedCategory = category }
+        if let incomeCategory = transaction.incomeCategoryId { selectedIncomeCategory = incomeCategory }
+        if let bank = transaction.bank { selectedBank = bank }
+        sender = transaction.sender ?? ""
+        receiver = transaction.receiver ?? ""
+        refId = transaction.refId ?? ""
+        
+        // Handle SubTransactions
+        if let subs = transaction.subTransactions {
+            draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId) }
+            // Only add empty row if there is remaining amount
+            let subTotal = subs.reduce(0) { $0 + $1.amount }
+            if subTotal < (Double(amount) ?? 0.0) {
+                draftSubTransactions.append(DraftSubTransaction())
+            }
+        } else {
+             // If manual amount set but no subs, add one empty. 
+             // Logic: If opening "New", amount is "" -> append one.
+             // If opening "Edit" with amount 100 but no subs -> append one.
+             draftSubTransactions = [DraftSubTransaction()]
+        }
+    }
+    
+    private func saveTransaction() {
+        guard let amountValue = Double(amount) else { return }
+        
+        // Convert drafts to SubTransactions
+        let finalSubs: [SubTransaction]? = {
+             let valid = draftSubTransactions.compactMap { draft -> SubTransaction? in
+                 guard let val = Double(draft.amount), val > 0 else { return nil }
+                 return SubTransaction(amount: val, categoryId: draft.category)
+             }
+             return valid.isEmpty ? nil : valid
+        }()
+
+        if var transaction = transactionToEdit {
+            transaction.amount = amountValue
+            transaction.description = description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description
+            transaction.date = date
+            transaction.type = type
+            transaction.sender = sender.isEmpty ? nil : sender
+            transaction.receiver = receiver.isEmpty ? nil : receiver
+            transaction.categoryId = type == .expense ? selectedCategory : nil
+            transaction.incomeCategoryId = type == .income ? selectedIncomeCategory : nil
+            transaction.bank = selectedBank == .unknown ? nil : selectedBank
+            transaction.refId = refId.isEmpty ? nil : refId
+            transaction.subTransactions = finalSubs
+
+            transactionStore.updateTransaction(transaction)
+        } else {
+            let transaction = Transaction(
+                refId: refId.isEmpty ? nil : refId,
+                amount: amountValue,
+                description: description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description,
+                date: date,
+                sender: sender.isEmpty ? nil : sender,
+                receiver: receiver.isEmpty ? nil : receiver,
+                type: type,
+                source: slipData != nil ? .scan : .manual,
+                categoryId: type == .expense ? selectedCategory : nil,
+                incomeCategoryId: type == .income ? selectedIncomeCategory : nil,
+                bank: selectedBank == .unknown ? nil : selectedBank,
+                imagePath: nil,
+                subTransactions: finalSubs
+            )
+            transactionStore.addTransaction(transaction)
+        }
+
+        dismiss()
     }
 
     init(slipData: SlipData? = nil, transactionToEdit: Transaction? = nil) {
@@ -64,7 +301,7 @@ struct AddTransactionView: View {
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            theme.background
                 .ignoresSafeArea()
 
             NavigationView {
@@ -98,25 +335,25 @@ struct AddTransactionView: View {
                             Button(action: { showDatePicker = true }) {
                                 HStack {
                                     Image(systemName: "calendar")
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(theme.primary)
                                     Text(dateFormatted)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(theme.textPrimary)
                                         .fontWeight(.medium)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(theme.textSecondary)
                                 }
                                 .padding()
-                                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .background(theme.cardBackground.opacity(0.7))
                                 .cornerRadius(10)
                             }
                         }
                         .padding()
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .background(theme.cardBackground)
                         .cornerRadius(20)
                         .padding(.horizontal)
-                        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                        .shadow(color: theme.textPrimary.opacity(0.05), radius: 5, x: 0, y: 2)
 
                         // MARK: - Category
 
@@ -125,7 +362,7 @@ struct AddTransactionView: View {
                                 HStack {
                                     Text("Category")
                                         .font(.headline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(theme.textSecondary)
                                     Spacer()
                                     Button(action: {
                                         withAnimation(.spring()) {
@@ -134,9 +371,9 @@ struct AddTransactionView: View {
                                     }) {
                                         Image(systemName: isCategoryExpanded ? "chevron.up" : "chevron.down")
                                             .font(.caption)
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(theme.primary)
                                             .padding(8)
-                                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                            .background(theme.cardBackground.opacity(0.7))
                                             .clipShape(Circle())
                                     }
                                 }
@@ -157,7 +394,7 @@ struct AddTransactionView: View {
                                             }
                                         }
                                         .padding()
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .background(theme.cardBackground)
                                         .cornerRadius(20)
                                         .padding(.horizontal)
                                     } else {
@@ -176,7 +413,7 @@ struct AddTransactionView: View {
                                             }
                                             .padding()
                                         }
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .background(theme.cardBackground)
                                         .cornerRadius(20)
                                         .padding(.horizontal)
                                     }
@@ -195,7 +432,7 @@ struct AddTransactionView: View {
                                             }
                                         }
                                         .padding()
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .background(theme.cardBackground)
                                         .cornerRadius(20)
                                         .padding(.horizontal)
                                     } else {
@@ -214,7 +451,7 @@ struct AddTransactionView: View {
                                             }
                                             .padding()
                                         }
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .background(theme.cardBackground)
                                         .cornerRadius(20)
                                         .padding(.horizontal)
                                     }
@@ -227,17 +464,17 @@ struct AddTransactionView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Note")
                                 .font(.headline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(theme.textSecondary)
                                 .padding(.horizontal)
 
                             HStack {
                                 Image(systemName: "square.and.pencil")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(theme.textSecondary)
                                 TextField("Add a description...", text: $description)
                                     .focused($focusedField, equals: .description)
                             }
                             .padding()
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .background(theme.cardBackground)
                             .cornerRadius(16)
                             .padding(.horizontal)
                         }
@@ -283,11 +520,11 @@ struct AddTransactionView: View {
                             label: {
                                 Text("More Details")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(theme.textPrimary)
                             }
                         )
                         .padding()
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .background(theme.cardBackground)
                         .cornerRadius(16)
                         .padding(.horizontal)
 
@@ -295,7 +532,7 @@ struct AddTransactionView: View {
                         Spacer(minLength: 50)
                     }
                 }
-                .background(Color(uiColor: .systemGroupedBackground))
+                .background(theme.background)
                 .navigationTitle(transactionToEdit == nil ? "New Transaction" : "Edit Transaction")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -357,7 +594,7 @@ struct AddTransactionView: View {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? color : Color(uiColor: .tertiarySystemGroupedBackground))
+                        .fill(isSelected ? color : theme.cardBackground.opacity(0.7))
                         .frame(width: 50, height: 50)
 
                     Image(systemName: icon)
@@ -368,7 +605,7 @@ struct AddTransactionView: View {
                 if isCategoryExpanded {
                     Text(name)
                         .font(.caption)
-                        .foregroundColor(isSelected ? .primary : .secondary)
+                        .foregroundColor(isSelected ? theme.textPrimary : theme.textSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -380,11 +617,12 @@ struct AddTransactionView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(theme.textSecondary)
             TextField(title, text: text)
+                .textFieldStyle(.plain)
                 .focused($focusedField, equals: field)
                 .padding(10)
-                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                .background(theme.cardBackground.opacity(0.7))
                 .cornerRadius(8)
         }
     }
@@ -395,13 +633,13 @@ struct AddTransactionView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Slip Image")
                 .font(.headline)
-                .foregroundColor(.secondary)
+                .foregroundColor(theme.textSecondary)
 
             if let loadedImage = loadedImage {
                 if !isShowSlip {
                     ZStack {
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                            .fill(theme.cardBackground)
                             .frame(height: 200)
 
                         Image(uiImage: loadedImage)
@@ -434,127 +672,13 @@ struct AddTransactionView: View {
                     Spacer()
                 }
                 .frame(height: 200)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .background(theme.cardBackground)
                 .cornerRadius(16)
             }
         }
     }
 
-    private var subTransactionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Sub Transactions")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal)
 
-            VStack(spacing: 0) {
-                ForEach($subTransactions) { $sub in
-                    HStack {
-                        // Amount Field
-                        TextField("Amount", value: $sub.amount, format: .number)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 8)
-                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                            .cornerRadius(6)
-                            .frame(width: 100)
-
-                        Spacer()
-
-                        // Category Picker
-                        Picker("Category", selection: $sub.categoryId) {
-                            ForEach(ExpenseCategory.allCases) { category in
-                                HStack {
-                                    Image(systemName: category.icon)
-                                        .foregroundColor(category.color)
-                                    Text(category.displayName)
-                                }
-                                .tag(category)
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-
-                        // Delete Button
-                        Button(action: {
-                            if let index = subTransactions.firstIndex(where: { $0.id == sub.id }) {
-                                subTransactions.remove(at: index)
-                            }
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red)
-                                .font(.title3)
-                        }
-                        .padding(.leading, 8)
-                    }
-                    .padding()
-
-                    if sub.id != subTransactions.last?.id {
-                        Divider().padding(.leading)
-                    }
-                }
-
-                if !subTransactions.isEmpty {
-                    Divider()
-                }
-
-                // Add New Sub Transaction Row
-                HStack {
-                    TextField("Amount", text: $newSubAmount)
-                        .keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .subAmount)
-                        .padding(8)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(subTransactionError != nil ? Color.red : Color.clear, lineWidth: 1)
-                        )
-                        .onChange(of: newSubAmount) { _ in
-                            subTransactionError = nil
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Spacer()
-
-                    Picker("Category", selection: $newSubCategory) {
-                        ForEach(ExpenseCategory.allCases) { category in
-                            HStack {
-                                Image(systemName: category.icon)
-                                    .foregroundColor(category.color)
-                                Text(category.displayName)
-                            }
-                            .tag(category)
-                        }
-                    }
-                    .labelsHidden()
-
-                    Button(action: addSubTransaction) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                    }
-                    .disabled(newSubAmount.isEmpty)
-                }
-                .padding()
-
-                if let error = subTransactionError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .cornerRadius(16)
-            .padding()
-        }
-    }
 
     // MARK: - Fullscreen Overlay (same hierarchy)
 
@@ -616,38 +740,9 @@ struct AddTransactionView: View {
         return formatter.string(from: date)
     }
 
-    private func addSubTransaction() {
-        guard let amountValue = Double(newSubAmount) else { return }
 
-        let mainAmount = Double(amount) ?? 0.0
-        let currentSubTotal = subTransactions.reduce(0) { $0 + $1.amount }
 
-        if currentSubTotal + amountValue > mainAmount {
-            subTransactionError = "Exceeds total amount"
-            return
-        }
 
-        let newSub = SubTransaction(amount: amountValue, categoryId: newSubCategory)
-        subTransactions.append(newSub)
-
-        newSubAmount = ""
-        newSubCategory = .others
-        subTransactionError = nil
-    }
-
-    private func populateFromTransaction(_ transaction: Transaction) {
-        amount = String(transaction.amount)
-        description = transaction.description
-        date = transaction.date
-        type = transaction.type
-        if let category = transaction.categoryId { selectedCategory = category }
-        if let incomeCategory = transaction.incomeCategoryId { selectedIncomeCategory = incomeCategory }
-        if let bank = transaction.bank { selectedBank = bank }
-        sender = transaction.sender ?? ""
-        receiver = transaction.receiver ?? ""
-        refId = transaction.refId ?? ""
-        subTransactions = transaction.subTransactions ?? []
-    }
 
     private func populateFromSlipData() {
         guard let slipData = slipData else { return }
@@ -686,44 +781,7 @@ struct AddTransactionView: View {
         }
     }
 
-    private func saveTransaction() {
-        guard let amountValue = Double(amount) else { return }
 
-        if var transaction = transactionToEdit {
-            transaction.amount = amountValue
-            transaction.description = description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description
-            transaction.date = date
-            transaction.type = type
-            transaction.sender = sender.isEmpty ? nil : sender
-            transaction.receiver = receiver.isEmpty ? nil : receiver
-            transaction.categoryId = type == .expense ? selectedCategory : nil
-            transaction.incomeCategoryId = type == .income ? selectedIncomeCategory : nil
-            transaction.bank = selectedBank == .unknown ? nil : selectedBank
-            transaction.refId = refId.isEmpty ? nil : refId
-            transaction.subTransactions = subTransactions.isEmpty ? nil : subTransactions
-
-            transactionStore.updateTransaction(transaction)
-        } else {
-            let transaction = Transaction(
-                refId: refId.isEmpty ? nil : refId,
-                amount: amountValue,
-                description: description.isEmpty ? (type == .income ? "Income" : (type == .expense ? "Expense" : "Transfer")) : description,
-                date: date,
-                sender: sender.isEmpty ? nil : sender,
-                receiver: receiver.isEmpty ? nil : receiver,
-                type: type,
-                source: slipData != nil ? .scan : .manual,
-                categoryId: type == .expense ? selectedCategory : nil,
-                incomeCategoryId: type == .income ? selectedIncomeCategory : nil,
-                bank: selectedBank == .unknown ? nil : selectedBank,
-                imagePath: nil,
-                subTransactions: subTransactions.isEmpty ? nil : subTransactions
-            )
-            transactionStore.addTransaction(transaction)
-        }
-
-        dismiss()
-    }
 
     // MARK: - Zoomable ScrollView (UIKit)
 
