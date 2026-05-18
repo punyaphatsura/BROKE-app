@@ -45,6 +45,16 @@ struct HomeView: View {
         newSlipsCount - unprocessedCount
     }
 
+    private var slipBannerBankSources: String {
+        let banks = viewModel.recentScannedTransactions
+            .compactMap { $0.bank }
+            .filter { $0 != .unknown }
+        let uniqueNames = NSOrderedSet(array: banks.map { $0.rawValue })
+            .array as? [String] ?? []
+        guard !uniqueNames.isEmpty else { return "Tap Scan to review" }
+        return "From " + uniqueNames.prefix(4).joined(separator: " · ")
+    }
+
     var groupedTransactions: [(key: Date, value: [Transaction])] {
         let grouped = Dictionary(grouping: transactionStore.transactions) { transaction in
             Calendar.current.startOfDay(for: transaction.date)
@@ -272,7 +282,7 @@ struct HomeView: View {
                      : "Rawr! Found \(viewModel.recentScannedTransactions.count) slips!")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text("Tap Scan to review and file them")
+                Text(slipBannerBankSources)
                     .font(.system(size: 12))
                     .foregroundColor(theme.textSecondary)
             }
