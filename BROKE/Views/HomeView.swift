@@ -34,6 +34,7 @@ struct HomeView: View {
     @State private var transactionContentPositions: [UUID: CGFloat] = [:]
     @State private var scrollOffset: CGFloat = 0
     @EnvironmentObject var theme: ThemeManager
+    @AppStorage("userName") private var userName: String = ""
 
     // Computed properties for counts
     var unprocessedCount: Int {
@@ -171,7 +172,7 @@ struct HomeView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Hi, there.")
+                Text(userName.isEmpty ? "Hi, there." : "Hi, \(userName).")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                 Text(viewModel.monthYearString)

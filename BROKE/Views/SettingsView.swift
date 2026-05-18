@@ -11,6 +11,7 @@ struct SettingsView: View {
     @EnvironmentObject var transactionStore: TransactionStore
     @EnvironmentObject var theme: ThemeManager
     @AppStorage("lastScannedDate") private var lastScannedDate: Date?
+    @AppStorage("userName") private var userName: String = ""
     @State private var isRequestingAccess = false
     @State private var isImportingFile = false
     @State private var exportedFileURL: URL?
@@ -26,6 +27,16 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("Profile")) {
+                    HStack {
+                        Text("Name")
+                        Spacer()
+                        TextField("Your name", text: $userName)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundColor(theme.textSecondary)
+                    }
+                }
+
                 Section(header: Text("Appearance")) {
                     Picker("Theme", selection: $theme.character) {
                         Label("Penguin", systemImage: "snowflake")
