@@ -80,6 +80,10 @@ struct AnalyticsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
+                // 0) Monthly Spending Bar Chart (6-month history)
+                MonthlyTotalsChart(transactions: transactionStore.getAllTransactions())
+                    .padding(.top, 8)
+
                 // 1) Month Navigation
                 MonthYearNavigator(currentDate: $currentDate)
                 
@@ -779,6 +783,68 @@ extension Int {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         return f.string(from: NSNumber(value: self)) ?? "\(self)"
+    }
+}
+
+struct MonthlyTotalsBar: Identifiable {
+    let id = UUID()
+    let month: Date
+    let expense: Double
+}
+
+struct MonthlyTotalsChart: View {
+    let transactions: [Transaction]
+    @EnvironmentObject var theme: ThemeManager
+
+    private var bars: [MonthlyTotalsBar] {
+        let calendar = Calendar.current
+        let today = Date()
+        return (0..<6).reversed().compactMap { offset -> MonthlyTotalsBar? in
+            guard let month = calendar.date(byAdding: .month, value: -offset, to: today) else { return nil }
+            let year  = calendar.component(.year,  from: month)
+            let mComp = calendar.component(.month, from: month)
+            let total = transactions
+                .filter {
+                    $0.type == .expense &&
+                    calendar.component(.year,  from: $0.date) == year &&
+                    calendar.component(.month, from: $0.date) == mComp
+                }
+                .reduce(0.0) { $0 + $1.amount }
+            return MonthlyTotalsBar(month: month, expense: total)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Monthly Spending")
+                .font(.headline)
+                .foregroundColor(theme.textPrimary)
+            Chart(bars) { bar in
+                BarMark(
+                    x: .value("Month", bar.month, unit: .month),
+                    y: .value("Expense", bar.expense)
+                )
+                .foregroundStyle(theme.primary)
+                .cornerRadius(6)
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .month)) {
+                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisValueLabel()
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            .frame(height: 160)
+        }
+        .padding()
+        .background(theme.cardBackground)
+        .cornerRadius(16)
+        .padding(.horizontal)
     }
 }
 
