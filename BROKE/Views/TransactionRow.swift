@@ -113,13 +113,6 @@ struct TransactionRow: View {
                 )
         }
         .padding(.vertical, 10)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                transactionStore.deleteTransactionById(transaction.id)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
         .sheet(isPresented: $showingEditSheet) {
             AddTransactionView(transactionToEdit: transaction)
                 .environmentObject(transactionStore)
@@ -127,6 +120,13 @@ struct TransactionRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             showingEditSheet = true
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                transactionStore.deleteTransactionById(transaction.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 }

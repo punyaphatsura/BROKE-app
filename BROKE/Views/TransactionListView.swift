@@ -98,13 +98,6 @@ struct TransactionListView: View {
                         ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
                             TransactionRow(transaction: transaction)
                                 .listRowBackground(theme.cardBackground)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteTransaction(transaction)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
                         }
                     }
                 }
