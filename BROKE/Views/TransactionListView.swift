@@ -31,8 +31,57 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        VStack {
-            if customTransactions == nil {
+        VStack(spacing: 0) {
+            if let txns = customTransactions {
+                let totalExpense = txns.filter { $0.type == .expense }.reduce(0) { $0 + $1.amount }
+                let totalIncome = txns.filter { $0.type == .income }.reduce(0) { $0 + $1.amount }
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(txns.count) transactions")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                        if totalExpense > 0 && totalIncome > 0 {
+                            Text(totalExpense.formattedCurrency)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.expense)
+                        } else if totalIncome > 0 {
+                            Text(totalIncome.formattedCurrency)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.income)
+                        } else {
+                            Text(totalExpense.formattedCurrency)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundColor(theme.expense)
+                        }
+                    }
+                    Spacer()
+                    if totalIncome > 0 {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Income")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                            Text(totalIncome.formattedCurrency)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.income)
+                        }
+                    }
+                    if totalExpense > 0 {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Expense")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                            Text(totalExpense.formattedCurrency)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(theme.expense)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(theme.cardBackground)
+
+                Divider()
+            } else {
                 Picker("Filter", selection: $filterType) {
                     Text("All").tag(nil as TransactionType?)
                     Text("Income").tag(TransactionType.income as TransactionType?)
@@ -40,6 +89,7 @@ struct TransactionListView: View {
                 }
                 .pickerStyle(SegmentedPickerStyle())
                 .padding(.horizontal)
+                .padding(.vertical, 8)
             }
 
             List {
@@ -48,9 +98,13 @@ struct TransactionListView: View {
                         ForEach(section.value.sorted(by: { $0.date > $1.date })) { transaction in
                             TransactionRow(transaction: transaction)
                                 .listRowBackground(theme.cardBackground)
-                        }
-                        .onDelete { indexSet in
-                            deleteTransactions(at: indexSet, in: section.value)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        deleteTransaction(transaction)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                         }
                     }
                 }
@@ -75,14 +129,11 @@ struct TransactionListView: View {
         }
     }
 
-    private func deleteTransactions(at offsets: IndexSet, in transactions: [Transaction]) {
-        let transactionsToDelete = offsets.map { transactions[$0] }
-        for transaction in transactionsToDelete {
-            if let index = transactionStore.transactions.firstIndex(where: { $0.id == transaction.id }) {
-                transactionStore.transactions.remove(at: index)
-            }
+    private func deleteTransaction(_ transaction: Transaction) {
+        if let index = transactionStore.transactions.firstIndex(where: { $0.id == transaction.id }) {
+            transactionStore.transactions.remove(at: index)
+            transactionStore.saveTransactions()
         }
-        transactionStore.saveTransactions()
     }
 }
 
