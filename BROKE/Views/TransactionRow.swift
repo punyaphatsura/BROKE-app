@@ -82,6 +82,18 @@ struct TransactionRow: View {
                     .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
 
+                if let bank = transaction.bank, bank != .unknown {
+                    Text(bank.rawValue)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(theme.primary.opacity(0.12))
+                        )
+                }
+
                 if let subTransactions = transaction.subTransactions, !subTransactions.isEmpty {
                     Text(subTransactions.map { $0.categoryId.displayName }.joined(separator: ", "))
                         .font(.caption2)
@@ -101,13 +113,6 @@ struct TransactionRow: View {
                 )
         }
         .padding(.vertical, 10)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                transactionStore.deleteTransactionById(transaction.id)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
         .sheet(isPresented: $showingEditSheet) {
             AddTransactionView(transactionToEdit: transaction)
                 .environmentObject(transactionStore)
@@ -115,6 +120,13 @@ struct TransactionRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             showingEditSheet = true
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                transactionStore.deleteTransactionById(transaction.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 }

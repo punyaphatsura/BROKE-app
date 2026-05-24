@@ -29,7 +29,7 @@ class SlipExtractionService: ObservableObject {
         model = ai.generativeModel(modelName: "gemini-2.5-flash")
     }
 
-    func processSlip(image: UIImage, useGeminiOnly: Bool = false, completion: @escaping (SlipData?) -> Void) {
+    func processSlip(image: UIImage, useGeminiOnly: Bool = false, geminiEnabled: Bool = true, completion: @escaping (SlipData?) -> Void) {
         if useGeminiOnly {
             processSlipWithGemini(image: image, completion: completion)
             return
@@ -51,12 +51,20 @@ class SlipExtractionService: ObservableObject {
                     }
                 } else {
                     // Fallback to Gemini if SlipOK fails
-                    self?.processSlipWithGemini(image: image, completion: completion)
+                    if geminiEnabled {
+                        self?.processSlipWithGemini(image: image, completion: completion)
+                    } else {
+                        completion(nil)
+                    }
                 }
             }
         } else {
             // No QR Code, use Gemini
-            processSlipWithGemini(image: image, completion: completion)
+            if geminiEnabled {
+                processSlipWithGemini(image: image, completion: completion)
+            } else {
+                completion(nil)
+            }
         }
     }
 

@@ -34,6 +34,7 @@ struct HomeView: View {
     @State private var transactionContentPositions: [UUID: CGFloat] = [:]
     @State private var scrollOffset: CGFloat = 0
     @EnvironmentObject var theme: ThemeManager
+    @AppStorage("userName") private var userName: String = ""
 
     // Computed properties for counts
     var unprocessedCount: Int {
@@ -42,6 +43,16 @@ struct HomeView: View {
 
     var processedCount: Int {
         newSlipsCount - unprocessedCount
+    }
+
+    private var slipBannerBankSources: String {
+        let banks = viewModel.recentScannedTransactions
+            .compactMap { $0.bank }
+            .filter { $0 != .unknown }
+        let uniqueNames = NSOrderedSet(array: banks.map { $0.rawValue })
+            .array as? [String] ?? []
+        guard !uniqueNames.isEmpty else { return "Tap Scan to review" }
+        return "From " + uniqueNames.prefix(4).joined(separator: " · ")
     }
 
     var groupedTransactions: [(key: Date, value: [Transaction])] {
@@ -171,7 +182,7 @@ struct HomeView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Hi, there.")
+                Text(userName.isEmpty ? "Hi, there." : "Hi, \(userName).")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                 Text(viewModel.monthYearString)
@@ -271,7 +282,7 @@ struct HomeView: View {
                      : "Rawr! Found \(viewModel.recentScannedTransactions.count) slips!")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text("Tap Scan to review and file them")
+                Text(slipBannerBankSources)
                     .font(.system(size: 12))
                     .foregroundColor(theme.textSecondary)
             }

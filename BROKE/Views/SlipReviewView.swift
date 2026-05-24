@@ -8,6 +8,8 @@ struct SlipReviewView: View {
     @StateObject private var scannerViewModel = SlipScannerViewModel()
     @StateObject private var viewModel = HomeViewModel()
 
+    @AppStorage("confirmedSlipsCount") private var confirmedSlipsCount: Int = 0
+
     @State private var currentIndex: Int = 0
     @State private var showingEditSheet = false
     @State private var showingQuotaAlert = false
@@ -271,6 +273,7 @@ struct SlipReviewView: View {
     }
 
     private func confirmSlip() {
+        confirmedSlipsCount += 1
         advanceSlip()
     }
 

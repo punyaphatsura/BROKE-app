@@ -10,13 +10,16 @@ struct ContentView: View {
             HomeView()
                 .tag(0)
 
+            SlipReviewView()
+                .tag(1)
+
             NavigationStack {
                 AnalyticsView()
             }
-            .tag(1)
+            .tag(2)
 
             SettingsView()
-                .tag(2)
+                .tag(3)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .ignoresSafeArea(.container, edges: .bottom)  // top safe area respected; bottom ignored for full-bleed
