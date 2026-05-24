@@ -14,11 +14,18 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 class ThemeManager: ObservableObject {
-    @AppStorage("themeCharacter") var character: ThemeCharacter = .penguin {
-        willSet { objectWillChange.send() }
+    @Published var character: ThemeCharacter {
+        didSet { UserDefaults.standard.set(character.rawValue, forKey: "themeCharacter") }
     }
-    @AppStorage("appearanceMode") var appearance: AppearanceMode = .light {
-        willSet { objectWillChange.send() }
+    @Published var appearance: AppearanceMode {
+        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearanceMode") }
+    }
+
+    init() {
+        character = UserDefaults.standard.string(forKey: "themeCharacter")
+            .flatMap(ThemeCharacter.init(rawValue:)) ?? .penguin
+        appearance = UserDefaults.standard.string(forKey: "appearanceMode")
+            .flatMap(AppearanceMode.init(rawValue:)) ?? .light
     }
 
     var preferredColorScheme: ColorScheme? {
