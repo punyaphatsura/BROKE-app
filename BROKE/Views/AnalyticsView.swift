@@ -623,38 +623,44 @@ struct CategoryPerformanceList: View {
         let category: ExpenseCategory
         let currentAmount: Double
         let avgPast: Double
+        let monthlyTrend: [Double]  // [3mo ago, 2mo ago, 1mo ago, current] oldest→newest
         var delta: Double { currentAmount - avgPast }
         var isLower: Bool { delta < 0 }
     }
-    
+
     private var rows: [CategoryPerf] {
         let grouped = Dictionary(grouping: currentTransactions, by: { $0.categoryId ?? .others })
-        // For distinct categories in current month
         var result: [CategoryPerf] = []
-        
+        let calendar = Calendar.current
+
         for (cat, txs) in grouped {
             let currentSum = txs.reduce(0.0) { $0 + $1.amount }
-            
-            // Calculate avg for this cat in past 3 months
-            let pastSum = previous3Months.map { date in
-                let calendar = Calendar.current
+
+            var perMonth: [Double] = []
+            for date in previous3Months.reversed() { // reversed: oldest first
                 let y = calendar.component(.year, from: date)
                 let m = calendar.component(.month, from: date)
-                
-                // Fetch for month -> Flatten -> Filter for Category
                 let monthTxs = transactionStore.getAllTransactions().filter {
                     let ty = calendar.component(.year, from: $0.date)
                     let tm = calendar.component(.month, from: $0.date)
                     return ty == y && tm == m && $0.type == .expense
                 }
                 let flattened = flattenTransactions(monthTxs)
-                return flattened.filter { $0.categoryId == cat }
+                let catSum = flattened.filter { $0.categoryId == cat }
                     .reduce(0.0) { $0 + $1.amount }
-            }.reduce(0.0, +)
-            
+                perMonth.append(catSum)
+            }
+            perMonth.append(currentSum) // current month last
+
+            let pastSum = perMonth.dropLast().reduce(0.0, +)
             let avg = previous3Months.isEmpty ? 0 : pastSum / Double(previous3Months.count)
-            
-            result.append(CategoryPerf(category: cat, currentAmount: currentSum, avgPast: avg))
+
+            result.append(CategoryPerf(
+                category: cat,
+                currentAmount: currentSum,
+                avgPast: avg,
+                monthlyTrend: perMonth
+            ))
         }
         return result.sorted { $0.currentAmount > $1.currentAmount }
     }
@@ -695,9 +701,14 @@ struct CategoryPerformanceList: View {
                             }
                             .foregroundColor(row.isLower ? theme.income : theme.accent)
                         }
-                        
+
+                        let trendColor: Color = (row.monthlyTrend.last ?? 0) <= (row.monthlyTrend.first ?? 0)
+                            ? theme.income : theme.expense
+                        SparklineView(values: row.monthlyTrend, color: trendColor)
+                            .frame(width: 50, height: 20)
+
                         Spacer()
-                        
+
                         Text(row.currentAmount.formattedCurrency)
                             .font(.body)
                             .fontWeight(.semibold)
@@ -715,6 +726,40 @@ struct CategoryPerformanceList: View {
         .padding()
         .background(theme.background)
         .padding(.horizontal)
+    }
+}
+
+private struct SparklineView: View {
+    let values: [Double]
+    let color: Color
+
+    var body: some View {
+        if values.count >= 2 {
+            let maxVal = values.max() ?? 1
+            let minVal = values.min() ?? 0
+            let range = maxVal - minVal
+
+            Chart(Array(values.enumerated()), id: \.offset) { index, value in
+                LineMark(
+                    x: .value("Month", index),
+                    y: .value("Amount", value)
+                )
+                .foregroundStyle(color)
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+
+                if index == values.count - 1 {
+                    PointMark(
+                        x: .value("Month", index),
+                        y: .value("Amount", value)
+                    )
+                    .foregroundStyle(color)
+                    .symbolSize(20)
+                }
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: max(0, minVal - range * 0.1)...maxVal + range * 0.1)
+        }
     }
 }
 
