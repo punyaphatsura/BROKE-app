@@ -317,6 +317,93 @@ class SlipExtractionService: ObservableObject {
         return newImage
     }
 
+    func parseSubTransactionsText(_ text: String) async throws -> [(category: ExpenseCategory, amount: Double, note: String)] {
+        // Pre-format: parse each line into strict structure before sending to Gemini
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !lines.isEmpty else {
+            throw NSError(domain: "GeminiParse", code: 2, userInfo: [NSLocalizedDescriptionKey: "No valid lines found"])
+        }
+
+        var structuredLines: [String] = []
+        for (index, line) in lines.enumerated() {
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 3,
+                  let amount = Double(parts.last!.trimmingCharacters(in: .whitespaces)) else { continue }
+            let thaiCategory = parts[0].trimmingCharacters(in: .whitespaces)
+            let place = parts.dropFirst().dropLast().joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            structuredLines.append("[\(index + 1)] thai_category=\"\(thaiCategory)\" place=\"\(place)\" amount=\(Int(amount))")
+        }
+
+        guard !structuredLines.isEmpty else {
+            throw NSError(domain: "GeminiParse", code: 3, userInfo: [NSLocalizedDescriptionKey: "No lines matched expected format (tab-separated: category\\tplace\\tamount)"])
+        }
+
+        let prompt = """
+        You are given a structured expense list. Each line has a Thai category, a place name, and an amount.
+        Map each thai_category to exactly one of these English keys:
+        food, transport, accommodation, entertainment, shopping, health, necessary, gift, investment, tax, education, travel, insurance, bills, family, others
+
+        Thai category mapping hints:
+        - อาหาร/กิน/กาแฟ/เครื่องดื่ม → food
+        - เดินทาง/รถ/มอไซ/bts/mrt → transport
+        - ที่พัก/บ้าน/โรงแรม → accommodation
+        - บันเทิง/ดูหนัง/เกม/สตรีม/spotify/fitness → entertainment
+        - ฟุ่มเฟือย/ช้อปปิ้ง/shopee/lazada → shopping
+        - สุขภาพ/ยา/หมอ → health
+        - จำเป็น/ของใช้ → necessary
+        - ของขวัญ → gift
+        - ลงทุน → investment
+        - ภาษี → tax
+        - เรียน/การศึกษา → education
+        - ท่องเที่ยว → travel
+        - ประกัน → insurance
+        - บิล/ค่าน้ำ/ค่าไฟ/อินเทอร์เน็ต → bills
+        - ครอบครัว/สัตว์เลี้ยง → family
+
+        Expense list (\(structuredLines.count) items):
+        \(structuredLines.joined(separator: "\n"))
+
+        Return ONLY a valid JSON array with exactly \(structuredLines.count) elements, no markdown.
+        Each element: {"category": "<key>", "amount": <number>, "note": "<place>"}
+        """
+
+        let response = try await model.generateContent(prompt)
+        guard let responseText = response.text else {
+            throw NSError(domain: "GeminiParse", code: 0, userInfo: [NSLocalizedDescriptionKey: "No response from Gemini"])
+        }
+
+        let cleanText = responseText
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let data = cleanText.data(using: .utf8),
+              let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw NSError(domain: "GeminiParse", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Gemini response"])
+        }
+
+        let categoryMap: [String: ExpenseCategory] = [
+            "food": .food, "transport": .transport, "accommodation": .accommodation,
+            "entertainment": .entertainment, "shopping": .shopping, "health": .health,
+            "necessary": .necessary, "gift": .gift, "investment": .investment,
+            "tax": .tax, "education": .education, "travel": .travel,
+            "insurance": .insurance, "bills": .bills, "family": .family, "others": .others,
+        ]
+
+        return jsonArray.compactMap { item in
+            guard let key = item["category"] as? String, let category = categoryMap[key] else { return nil }
+            let amount: Double
+            if let d = item["amount"] as? Double { amount = d }
+            else if let i = item["amount"] as? Int { amount = Double(i) }
+            else { return nil }
+            let note = item["note"] as? String ?? ""
+            return (category: category, amount: amount, note: note)
+        }
+    }
+
     // Helper for category suggestion
     func suggestCategory(for slipData: SlipData) -> ExpenseCategory {
         let receiver = slipData.receiver.lowercased()

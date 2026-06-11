@@ -26,7 +26,6 @@ struct HomeView: View {
     @State private var newSlipsCount: Int = 0
     @State private var showingQuotaAlert = false
     @State private var isLastBatchExpanded: Bool = false
-    @State private var showingSlipReview = false
     @State private var showStickyHeader = false
     @State private var stickyDate: Date = Date()
     @State private var stickyExpense: Double = 0
@@ -126,12 +125,6 @@ struct HomeView: View {
             }
             .sheet(item: $viewModel.selectedTransactionForReview) { transaction in
                 AddTransactionView(transactionToEdit: transaction)
-            }
-            .sheet(isPresented: $showingSlipReview) {
-                SlipReviewView()
-                    .environmentObject(transactionStore)
-                    .environmentObject(photoService)
-                    .environmentObject(theme)
             }
             .alert("Limit Exceeded", isPresented: $showingQuotaAlert) {
                 Button("OK", role: .cancel) {}
@@ -301,7 +294,6 @@ struct HomeView: View {
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
-        .onTapGesture { showingSlipReview = true }
     }
 
     private var lazyTransactionList: some View {

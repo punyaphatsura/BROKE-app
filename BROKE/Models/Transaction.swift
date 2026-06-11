@@ -98,11 +98,11 @@ enum ExpenseCategory: String, CaseIterable, Codable, Identifiable {
         case .investment: return .mint
         case .gift: return .indigo
         case .accommodation: return .brown
-        case .necessary: return .cyan
-        case .tax: return .gray
+        case .necessary: return Color(red: 0.55, green: 0.82, blue: 0.30)
+        case .tax: return Color(red: 0.80, green: 0.65, blue: 0.15)
         case .insurance: return .teal
-        case .family: return .orange
-        case .others: return .gray
+        case .family: return .green
+        case .others: return Color(red: 0.55, green: 0.55, blue: 0.75)
         default: return .gray
         }
     }
@@ -150,6 +150,25 @@ struct SubTransaction: Identifiable, Codable {
     var id = UUID()
     var amount: Double
     var categoryId: ExpenseCategory
+    var note: String = ""
+
+    init(amount: Double, categoryId: ExpenseCategory, note: String = "") {
+        self.amount = amount
+        self.categoryId = categoryId
+        self.note = note
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, amount, categoryId, note
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
+        amount = try container.decode(Double.self, forKey: .amount)
+        categoryId = try container.decode(ExpenseCategory.self, forKey: .categoryId)
+        note = (try? container.decode(String.self, forKey: .note)) ?? ""
+    }
 }
 
 struct Transaction: Identifiable, Codable {

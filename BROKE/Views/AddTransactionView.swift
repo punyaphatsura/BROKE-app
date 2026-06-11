@@ -28,6 +28,12 @@ struct AddTransactionView: View {
     @State private var refId: String = ""
     @State private var loadedImage: UIImage? = nil
 
+    @StateObject private var extractionService = SlipExtractionService()
+    @State private var showSubTextInput: Bool = false
+    @State private var rawSubText: String = ""
+    @State private var isParsingSubText: Bool = false
+    @State private var subTextParseError: String? = nil
+
     @State private var isShowSlip: Bool = false
     @State private var showZoom: Bool = false // <- swap to zoom view AFTER the matched-geometry animation
     @State private var draftSubTransactions: [DraftSubTransaction] = [DraftSubTransaction()]
@@ -37,6 +43,7 @@ struct AddTransactionView: View {
         let id = UUID()
         var amount: String = ""
         var category: ExpenseCategory = .others
+        var note: String = ""
     }
     
     // For custom date picker
@@ -70,8 +77,18 @@ struct AddTransactionView: View {
                 Text("Sub Transactions")
                     .font(.headline)
                     .foregroundColor(theme.textSecondary)
+
+                Button(action: { showSubTextInput = true }) {
+                    Image(systemName: "text.badge.plus")
+                        .font(.caption)
+                        .foregroundColor(theme.primary)
+                        .padding(6)
+                        .background(theme.primary.opacity(0.1))
+                        .cornerRadius(8)
+                }
+
                 Spacer()
-                
+
                 // Add Remaining Button
                 if remainingAmount > 0 {
                     Button(action: addRemainingAmount) {
@@ -90,24 +107,8 @@ struct AddTransactionView: View {
 
             VStack(spacing: 0) {
                 ForEach($draftSubTransactions) { $draft in
-                    HStack {
-                        // Amount Field
-                        TextField("Amount", text: $draft.amount)
-                            .textFieldStyle(.plain)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .subAmount(draft.id))
-                            .multilineTextAlignment(.trailing)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 8)
-                            .background(theme.cardBackground.opacity(0.7))
-                            .cornerRadius(6)
-                            . onChange(of: draft.amount) { _ in
-                                handleDraftChange()
-                            }
-
-                        Spacer()
-
-                        // Category Menu (Icon Only)
+                    HStack(spacing: 12) {
+                        // Category Menu — colored circle icon
                         Menu {
                             ForEach(ExpenseCategory.allCases) { category in
                                 Button(action: { draft.category = category }) {
@@ -115,24 +116,43 @@ struct AddTransactionView: View {
                                 }
                             }
                         } label: {
-                            Image(systemName: draft.category.icon)
-                                .foregroundColor(draft.category.color)
-                                .font(.title2)
-                                .frame(width: 30, height: 30)
+                            ZStack {
+                                Circle()
+                                    .fill(draft.category.color.opacity(0.18))
+                                    .frame(width: 38, height: 38)
+                                Image(systemName: draft.category.icon)
+                                    .foregroundColor(draft.category.color)
+                                    .font(.system(size: 16, weight: .medium))
+                            }
                         }
 
-                        // Delete Button (only if not the only empty row, or just clearer to allow delete)
-                        Button(action: {
-                            deleteDraft(id: draft.id)
-                        }) {
+                        // Note Field — flexible middle
+                        TextField("Note...", text: $draft.note)
+                            .textFieldStyle(.plain)
+                            .foregroundColor(theme.textPrimary)
+
+                        // Amount Field — fixed right
+                        TextField("0", text: $draft.amount)
+                            .textFieldStyle(.plain)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .subAmount(draft.id))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 70)
+                            .font(.body.monospacedDigit())
+                            .foregroundColor(theme.textPrimary)
+                            .onChange(of: draft.amount) { _ in
+                                handleDraftChange()
+                            }
+
+                        // Delete Button
+                        Button(action: { deleteDraft(id: draft.id) }) {
                             Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(.red.opacity(0.8))
                                 .font(.title3)
                         }
-                        .padding(.leading, 8)
-                        // Don't allowing deleting the last single empty row if you want, or just re-add
                     }
-                    .padding()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
 
                     if draft.id != draftSubTransactions.last?.id {
                         Divider().padding(.leading)
@@ -214,7 +234,41 @@ struct AddTransactionView: View {
         }
     }
 
-    // ... update populate and save logic ... 
+    private func parseSubText() {
+        isParsingSubText = true
+        subTextParseError = nil
+        let text = rawSubText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            do {
+                let results = try await extractionService.parseSubTransactionsText(text)
+                await MainActor.run {
+                    isParsingSubText = false
+                    guard !results.isEmpty else {
+                        subTextParseError = "Could not parse any sub-transactions."
+                        return
+                    }
+                    let total = results.reduce(0.0) { $0 + $1.amount }
+                    if (Double(amount) ?? 0) == 0 {
+                        amount = total == total.rounded(.towardZero) ? String(Int(total)) : String(total)
+                    }
+                    draftSubTransactions = results.map {
+                        let amtStr = $0.amount == $0.amount.rounded(.towardZero) ? String(Int($0.amount)) : String($0.amount)
+                        return DraftSubTransaction(amount: amtStr, category: $0.category, note: $0.note)
+                    }
+                    handleDraftChange()
+                    showSubTextInput = false
+                }
+            } catch {
+                await MainActor.run {
+                    isParsingSubText = false
+                    subTextParseError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // ... update populate and save logic ...
     
     private func populateFromTransaction(_ transaction: Transaction) {
         // ... previous basic fields ...
@@ -232,7 +286,7 @@ struct AddTransactionView: View {
         
         // Handle SubTransactions
         if let subs = transaction.subTransactions {
-            draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId) }
+            draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId, note: $0.note) }
             // Only add empty row if there is remaining amount
             let subTotal = subs.reduce(0) { $0 + $1.amount }
             if subTotal < (Double(amount) ?? 0.0) {
@@ -253,7 +307,7 @@ struct AddTransactionView: View {
         let finalSubs: [SubTransaction]? = {
              let valid = draftSubTransactions.compactMap { draft -> SubTransaction? in
                  guard let val = Double(draft.amount), val > 0 else { return nil }
-                 return SubTransaction(amount: val, categoryId: draft.category)
+                 return SubTransaction(amount: val, categoryId: draft.category, note: draft.note)
              }
              return valid.isEmpty ? nil : valid
         }()
@@ -577,6 +631,53 @@ struct AddTransactionView: View {
                         .padding()
                 }
             }
+
+            .sheet(isPresented: $showSubTextInput) {
+                    NavigationView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Paste lines in format: category\tplace\tamount")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+
+                            TextEditor(text: $rawSubText)
+                                .font(.system(.body, design: .monospaced))
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                                .padding(.horizontal)
+
+                            if let err = subTextParseError {
+                                Text(err)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal)
+                            }
+                        }
+                        .padding(.top)
+                        .navigationTitle("Auto-fill Sub Transactions")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") {
+                                    subTextParseError = nil
+                                    showSubTextInput = false
+                                }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                if isParsingSubText {
+                                    ProgressView()
+                                } else {
+                                    Button("Parse with Gemini") {
+                                        parseSubText()
+                                    }
+                                    .disabled(rawSubText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    .fontWeight(.bold)
+                                }
+                            }
+                        }
+                    }
+                }
 
             // ✅ Overlay in the SAME hierarchy (smooth matchedGeometryEffect)
             if isShowSlip {
