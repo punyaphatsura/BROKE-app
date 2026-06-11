@@ -64,51 +64,44 @@ struct AnalyticsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // 1) Month Navigation
+                // 1. How much this month?
                 MonthYearNavigator(currentDate: $currentDate)
-                
-                // 2) Summary Stats
                 SummaryStatsBoard(stats: monthStats)
 
-                // 3) Expense Trend Chart
+                // 2. Am I spending more or less lately?
                 ExpenseTrendChart(
                     transactions: transactionStore.getAllTransactions(),
                     currentDate: currentDate
                 )
 
-                // 4) Filter Tabs
+                // 3. Where did it go? (filter + donut)
                 TypeFilterTabs(selectedTab: $selectedTab)
-                
-                // 4) Main Donut (Category Breakdown)
                 CategoryBreakdownChart(
                     transactions: chartTransactions,
                     contextMonth: currentDate,
                     contextType: selectedTab,
                     totalAmount: selectedTab == .expense ? monthStats.expense : (selectedTab == .income ? monthStats.income : 0)
                 )
-                
-                // 5) Spending Timing (expense-only)
+
+                // Expense-only sections
                 if selectedTab == .expense {
+                    // 4. When do I spend?
                     SpendingTimingCard(
                         transactions: currentMonthTransactions,
                         currentDate: currentDate
                     )
-                }
 
-                // 6) Top Transactions (expense-only)
-                if selectedTab == .expense {
+                    // 5. Biggest hits
                     TopTransactionsList(transactions: chartTransactions)
-                }
 
-                // 7) Category Performance List
-                if selectedTab == .expense {
+                    // 6. Category deep-dive
                     CategoryPerformanceList(
                         currentTransactions: chartTransactions,
                         previous3Months: previous3Months,
                         transactionStore: transactionStore
                     )
                 }
-                
+
                 Spacer(minLength: 50)
             }
             .padding(.vertical)
