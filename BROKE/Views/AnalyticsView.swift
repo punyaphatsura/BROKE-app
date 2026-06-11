@@ -95,7 +95,12 @@ struct AnalyticsView: View {
                     )
                 }
 
-                // 6) Category Performance List
+                // 6) Top Transactions (expense-only)
+                if selectedTab == .expense {
+                    TopTransactionsList(transactions: chartTransactions)
+                }
+
+                // 7) Category Performance List
                 if selectedTab == .expense {
                     CategoryPerformanceList(
                         currentTransactions: chartTransactions,
@@ -548,7 +553,65 @@ struct SpendingTimingCard: View {
     }
 }
 
-// 8. Category Performance (New)
+// 8. Top Transactions List
+struct TopTransactionsList: View {
+    let transactions: [Transaction]
+    @EnvironmentObject var theme: ThemeManager
+
+    private var top5: [Transaction] {
+        Array(transactions
+            .sorted { $0.amount > $1.amount }
+            .prefix(5))
+    }
+
+    var body: some View {
+        if transactions.count >= 3 {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Biggest Spends This Month")
+                    .font(.headline)
+                    .foregroundColor(theme.textPrimary)
+
+                ForEach(top5) { tx in
+                    HStack(spacing: 12) {
+                        let cat = tx.categoryId ?? .others
+                        Image(systemName: cat.icon)
+                            .foregroundColor(cat.color)
+                            .font(.subheadline)
+                            .frame(width: 36, height: 36)
+                            .background(cat.color.opacity(0.12))
+                            .cornerRadius(10)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tx.description.isEmpty ? cat.displayName : tx.description)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(theme.textPrimary)
+                                .lineLimit(1)
+
+                            let dateStr = tx.date.formatted(.dateTime.month(.abbreviated).day())
+                            Text("\(cat.displayName) · \(dateStr)")
+                                .font(.caption)
+                                .foregroundColor(theme.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Text(tx.amount.formattedCurrency)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(theme.expense)
+                    }
+                }
+            }
+            .padding()
+            .background(theme.cardBackground)
+            .cornerRadius(16)
+            .padding(.horizontal)
+        }
+    }
+}
+
+// 9. Category Performance (New)
 struct CategoryPerformanceList: View {
     let currentTransactions: [Transaction]
     let previous3Months: [Date]
