@@ -40,7 +40,12 @@ struct AnalyticsHelpersTests {
     @Test func expenseTotals_returns12MonthsOldestFirst() {
         let results = expenseTotals(from: [], months: 12, referenceDate: Date())
         #expect(results.count == 12)
-        #expect(results[0].month <= results[11].month)
+        #expect(results[0].month < results[11].month)
+    }
+
+    @Test func expenseTotals_zeroMonths_returnsEmpty() {
+        let results = expenseTotals(from: [], months: 0, referenceDate: Date())
+        #expect(results.isEmpty)
     }
 
     // MARK: - dailySpend
@@ -54,7 +59,8 @@ struct AnalyticsHelpersTests {
     }
 
     @Test func dailySpend_ignoresOtherMonths() {
-        let t = makeExpense(amount: 999, daysAgo: 40)
+        let today = Calendar.current.component(.day, from: Date())
+        let t = makeExpense(amount: 999, daysAgo: today + 1)
         let result = dailySpend(from: [t], referenceDate: Date())
         #expect(result.values.reduce(0, +) == 0)
     }
