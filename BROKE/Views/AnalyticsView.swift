@@ -87,7 +87,15 @@ struct AnalyticsView: View {
                     totalAmount: selectedTab == .expense ? monthStats.expense : (selectedTab == .income ? monthStats.income : 0)
                 )
                 
-                // 5) Category Performance List
+                // 5) Spending Timing (expense-only)
+                if selectedTab == .expense {
+                    SpendingTimingCard(
+                        transactions: currentMonthTransactions,
+                        currentDate: currentDate
+                    )
+                }
+
+                // 6) Category Performance List
                 if selectedTab == .expense {
                     CategoryPerformanceList(
                         currentTransactions: chartTransactions,
@@ -432,6 +440,111 @@ struct CategoryBreakdownChart: View {
             currentAngle += sliceDegrees
         }
         return nil
+    }
+}
+
+struct SpendingTimingCard: View {
+    let transactions: [Transaction]
+    let currentDate: Date
+    @EnvironmentObject var theme: ThemeManager
+
+    private var daily: [Int: Double] {
+        dailySpend(from: transactions, referenceDate: currentDate)
+    }
+
+    private var weekdayAvgs: [Int: Double] {
+        weekdayAverages(from: transactions, referenceDate: currentDate)
+    }
+
+    private var maxDailySpend: Double {
+        daily.values.max() ?? 1
+    }
+
+    private var maxWeekdayAvg: Double {
+        weekdayAvgs.values.max() ?? 1
+    }
+
+    private var daysInMonth: Int {
+        Calendar.current.range(of: .day, in: .month, for: currentDate)?.count ?? 30
+    }
+
+    private var firstWeekday: Int {
+        let calendar = Calendar.current
+        guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: currentDate)) else { return 1 }
+        return calendar.component(.weekday, from: monthStart)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("When Do You Spend?")
+                .font(.headline)
+                .foregroundColor(theme.textPrimary)
+
+            HStack(alignment: .top, spacing: 16) {
+                // Left: Daily heatmap
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("This Month")
+                        .font(.caption2)
+                        .foregroundColor(theme.textSecondary)
+
+                    let columns = Array(repeating: GridItem(.flexible(), spacing: 3), count: 7)
+                    let dayLabels = ["S", "M", "T", "W", "T", "F", "S"]
+
+                    LazyVGrid(columns: columns, spacing: 3) {
+                        ForEach(0..<dayLabels.count, id: \.self) { i in
+                            Text(dayLabels[i])
+                                .font(.system(size: 8))
+                                .foregroundColor(theme.textSecondary)
+                                .frame(maxWidth: .infinity)
+                        }
+                        ForEach(0..<(firstWeekday - 1), id: \.self) { _ in
+                            Color.clear.frame(height: 14)
+                        }
+                        ForEach(1...daysInMonth, id: \.self) { day in
+                            let spend = daily[day] ?? 0
+                            let intensity = maxDailySpend > 0 ? spend / maxDailySpend : 0
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(theme.expense.opacity(0.08 + intensity * 0.92))
+                                .frame(height: 14)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                // Right: Weekday average bars
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Avg by Day")
+                        .font(.caption2)
+                        .foregroundColor(theme.textSecondary)
+
+                    let weekdayOrder: [(label: String, wd: Int)] = [
+                        ("Mon", 2), ("Tue", 3), ("Wed", 4),
+                        ("Thu", 5), ("Fri", 6), ("Sat", 7), ("Sun", 1)
+                    ]
+                    ForEach(weekdayOrder, id: \.wd) { item in
+                        HStack(spacing: 4) {
+                            Text(item.label)
+                                .font(.system(size: 9))
+                                .foregroundColor(theme.textSecondary)
+                                .frame(width: 22, alignment: .leading)
+                            GeometryReader { geo in
+                                let avg = weekdayAvgs[item.wd] ?? 0
+                                let ratio = maxWeekdayAvg > 0 ? avg / maxWeekdayAvg : 0
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(theme.expense.opacity(0.3 + ratio * 0.7))
+                                    .frame(width: geo.size.width * ratio, height: 10)
+                            }
+                            .frame(height: 10)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+        .background(theme.cardBackground)
+        .cornerRadius(16)
+        .padding(.horizontal)
     }
 }
 
