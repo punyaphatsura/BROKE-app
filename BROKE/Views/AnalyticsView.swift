@@ -562,15 +562,17 @@ struct ExpenseTrendChart: View {
         expenseTotals(from: transactions, months: 12, referenceDate: currentDate)
     }
 
+    private var last6MonthsData: [(month: Date, total: Double)] {
+        expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
+    }
+
     private var sixMonthAvg: Double {
-        let last6 = expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
-        let sum = last6.reduce(0.0) { $0 + $1.total }
-        return last6.isEmpty ? 0 : sum / Double(last6.count)
+        let sum = last6MonthsData.reduce(0.0) { $0 + $1.total }
+        return last6MonthsData.isEmpty ? 0 : sum / Double(last6MonthsData.count)
     }
 
     private var sixMonthLow: Double {
-        expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
-            .map(\.total).min() ?? 0
+        last6MonthsData.map(\.total).min() ?? 0
     }
 
     private var currentTotal: Double {
