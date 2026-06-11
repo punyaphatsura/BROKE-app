@@ -583,3 +583,83 @@ fileprivate func flattenTransactions(_ transactions: [Transaction]) -> [Transact
     }
     return result
 }
+
+/// Returns total expense per month for the last `months` months ending at `referenceDate`.
+/// Result is sorted oldest → newest. Each tuple: (first-of-month Date, total expense Double).
+func expenseTotals(
+    from transactions: [Transaction],
+    months: Int,
+    referenceDate: Date
+) -> [(month: Date, total: Double)] {
+    let calendar = Calendar.current
+    return (0..<months).reversed().compactMap { offset -> (Date, Double)? in
+        guard let date = calendar.date(byAdding: .month, value: -offset, to: referenceDate),
+              let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: date))
+        else { return nil }
+        let y = calendar.component(.year, from: date)
+        let m = calendar.component(.month, from: date)
+        let total = transactions
+            .filter { $0.type == .expense
+                && calendar.component(.year, from: $0.date) == y
+                && calendar.component(.month, from: $0.date) == m }
+            .reduce(0.0) { $0 + $1.amount }
+        return (monthStart, total)
+    }
+}
+
+/// Returns a dict of day-of-month → total expense for the given month.
+func dailySpend(
+    from transactions: [Transaction],
+    referenceDate: Date
+) -> [Int: Double] {
+    let calendar = Calendar.current
+    let y = calendar.component(.year, from: referenceDate)
+    let m = calendar.component(.month, from: referenceDate)
+    let monthTxns = transactions.filter {
+        $0.type == .expense
+        && calendar.component(.year, from: $0.date) == y
+        && calendar.component(.month, from: $0.date) == m
+    }
+    var result: [Int: Double] = [:]
+    for t in monthTxns {
+        let day = calendar.component(.day, from: t.date)
+        result[day, default: 0] += t.amount
+    }
+    return result
+}
+
+/// Returns a dict of weekday (1=Sun...7=Sat) → average spend across all occurrences of
+/// that weekday in the given month.
+func weekdayAverages(
+    from transactions: [Transaction],
+    referenceDate: Date
+) -> [Int: Double] {
+    let calendar = Calendar.current
+    let y = calendar.component(.year, from: referenceDate)
+    let m = calendar.component(.month, from: referenceDate)
+    guard let range = calendar.range(of: .day, in: .month, for: referenceDate),
+          let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: referenceDate))
+    else { return [:] }
+    var weekdayCounts: [Int: Int] = [:]
+    for day in range {
+        if let d = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
+            let wd = calendar.component(.weekday, from: d)
+            weekdayCounts[wd, default: 0] += 1
+        }
+    }
+    let monthTxns = transactions.filter {
+        $0.type == .expense
+        && calendar.component(.year, from: $0.date) == y
+        && calendar.component(.month, from: $0.date) == m
+    }
+    var sums: [Int: Double] = [:]
+    for t in monthTxns {
+        let wd = calendar.component(.weekday, from: t.date)
+        sums[wd, default: 0] += t.amount
+    }
+    var result: [Int: Double] = [:]
+    for (wd, count) in weekdayCounts {
+        result[wd] = (sums[wd] ?? 0) / Double(count)
+    }
+    return result
+}
