@@ -46,8 +46,8 @@ struct AnalyticsView: View {
         return (income, expense, income - expense)
     }
     
-    // MARK: - 3. "Lower / Higher than Average" Logic
-    
+    // MARK: - 3. Previous Months Data
+
     // Get last 3 months dates (excluding current)
     private var previous3Months: [Date] {
         let calendar = Calendar.current
@@ -59,31 +59,11 @@ struct AnalyticsView: View {
         }
         return dates
     }
-    
-    // Average Monthly Expense of last 3 months
-    private var averageMonthlyExpense3Months: Double {
-        let pastMonths = previous3Months
-        let totalPast = pastMonths.map { date in
-            getTransactions(for: date).filter { $0.type == .expense }.reduce(0.0) { $0 + $1.amount }
-        }.reduce(0.0, +)
-        return pastMonths.isEmpty ? 0 : totalPast / Double(pastMonths.count)
-    }
-    
-    private var comparisonToAverage: (diff: Double, isLower: Bool) {
-        let currentExpense = monthStats.expense
-        let avg = averageMonthlyExpense3Months
-        let diff = currentExpense - avg
-        return (abs(diff), diff < 0)
-    }
 
     // MARK: - Body
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // 0) Monthly Spending Bar Chart (6-month history)
-                MonthlyTotalsChart(transactions: transactionStore.getAllTransactions())
-                    .padding(.top, 8)
-
                 // 1) Month Navigation
                 MonthYearNavigator(currentDate: $currentDate)
                 
@@ -101,33 +81,7 @@ struct AnalyticsView: View {
                     totalAmount: selectedTab == .expense ? monthStats.expense : (selectedTab == .income ? monthStats.income : 0)
                 )
                 
-                // 5) "Lower / Higher than Average" Tag
-                // Only show for Expense tab as per logic prompt
-                if selectedTab == .expense {
-                    ComparisonTagView(
-                        diff: comparisonToAverage.diff,
-                        isLower: comparisonToAverage.isLower,
-                        avg: averageMonthlyExpense3Months
-                    )
-                    
-                    // 6) Behavior Insight Engine
-                    BehaviorInsightCard(
-                        transactions: currentMonthTransactions,
-                        avgExpense: averageMonthlyExpense3Months
-                    )
-                    MascotInsightPill(transactions: currentMonthTransactions)
-                }
-                
-                // 7) Monthly Comparison Chart (Last 4 Months)
-                if selectedTab == .expense {
-                    MonthlyComparisonChart(
-                        currentDate: currentDate,
-                        transactionStore: transactionStore,
-                        average: averageMonthlyExpense3Months
-                    )
-                }
-                
-                // 8) Category Performance List
+                // 5) Category Performance List
                 if selectedTab == .expense {
                     CategoryPerformanceList(
                         currentTransactions: chartTransactions,
@@ -475,118 +429,6 @@ struct CategoryBreakdownChart: View {
     }
 }
 
-// 5. Comparison Tag (Updated Logic)
-struct ComparisonTagView: View {
-    let diff: Double
-    let isLower: Bool
-    let avg: Double
-    @EnvironmentObject var theme: ThemeManager
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: isLower ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                .foregroundColor(isLower ? theme.income : theme.expense)
-            
-            if avg == 0 {
-                Text("No data for comparison")
-                    .font(.subheadline)
-            } else {
-                Text("\(isLower ? "Lower" : "Higher") than average by \(Int(diff).formattedWithSeparator)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-        }
-        .padding()
-        .background(theme.cardBackground)
-        .cornerRadius(12)
-        .padding(.horizontal)
-    }
-}
-
-// 7. Monthly Comparison Chart (New)
-struct MonthlyComparisonChart: View {
-    let currentDate: Date
-    let transactionStore: TransactionStore
-    let average: Double
-    @EnvironmentObject var theme: ThemeManager
-    
-    // Last 4 months based on currentDate
-    // Data structure for stacked chart
-    struct MonthlyCategoryData: Identifiable {
-        let id = UUID()
-        let month: Date
-        let category: ExpenseCategory
-        let amount: Double
-    }
-    
-    // Last 4 months based on currentDate
-    private var chartData: [MonthlyCategoryData] {
-        let calendar = Calendar.current
-        var result: [MonthlyCategoryData] = []
-        
-        // Include current, -1, -2, -3 (Total 4 bars)
-        for i in (0...3).reversed() {
-            if let date = calendar.date(byAdding: .month, value: -i, to: currentDate) {
-                let y = calendar.component(.year, from: date)
-                let m = calendar.component(.month, from: date)
-                
-                // 1. Get Expenses for Month
-                let monthTxs = transactionStore.getAllTransactions().filter {
-                     let ty = calendar.component(.year, from: $0.date)
-                     let tm = calendar.component(.month, from: $0.date)
-                     return ty == y && tm == m && $0.type == .expense
-                }
-                
-                // 2. Flatten subtransactions
-                let flattened = flattenTransactions(monthTxs)
-                
-                // 3. Group by Category
-                let grouped = Dictionary(grouping: flattened, by: { $0.categoryId ?? .others })
-                
-                for (cat, txs) in grouped {
-                    let sum = txs.reduce(0.0) { $0 + $1.amount }
-                    result.append(MonthlyCategoryData(month: date, category: cat, amount: sum))
-                }
-            }
-        }
-        return result
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Compare to Last 3 Months")
-                .font(.headline)
-                .foregroundColor(theme.textPrimary)
-            Chart {
-                ForEach(chartData) { item in
-                    BarMark(
-                        x: .value("Month", item.month, unit: .month),
-                        y: .value("Amount", item.amount)
-                    )
-                    .foregroundStyle(item.category.color)
-                }
-                
-                RuleMark(y: .value("Average", average))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .month)) { _ in
-                    AxisValueLabel(format: .dateTime.month(.abbreviated))
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading)
-            }
-            .frame(height: 180)
-        }
-        .padding()
-        .background(theme.cardBackground)
-        .cornerRadius(16)
-        .padding(.horizontal)
-    }
-}
-
 // 8. Category Performance (New)
 struct CategoryPerformanceList: View {
     let currentTransactions: [Transaction]
@@ -705,78 +547,6 @@ struct CategoryDetailView: View {
     }
 }
 
-// 6. Behavior Insight Engine (New)
-struct BehaviorInsightCard: View {
-    let transactions: [Transaction]
-    let avgExpense: Double
-    @EnvironmentObject var theme: ThemeManager
-    
-    var insightText: String {
-        // Logic:
-        // 1. Weekend vs Weekday
-        let calendar = Calendar.current
-        let weekendSpend = transactions.filter {
-            let d = calendar.component(.weekday, from: $0.date)
-            return d == 1 || d == 7
-        }.reduce(0.0) { $0 + $1.amount }
-        let total = transactions.reduce(0.0) { $0 + $1.amount }
-        
-        // 2. Food Percent
-        let foodAmount = transactions.filter { $0.categoryId == .food }.reduce(0.0) { $0 + $1.amount }
-        let foodPct = total > 0 ? (foodAmount / total) : 0
-        
-        // 3. Variance (Simple: Current vs Avg)
-        let isHighVariance = avgExpense > 0 && total > (avgExpense * 1.2)
-        
-        // Synthesis
-        var traits: [String] = []
-        if total > 0 && (weekendSpend / total) > 0.4 { traits.append("Weekend Spender") }
-        if foodPct > 0.35 { traits.append("Foodie") }
-        if isHighVariance { traits.append("Spulsive Spender") } // calculated wording
-        if total < avgExpense * 0.8 && avgExpense > 0 { traits.append("Great Saver") }
-        
-        if traits.isEmpty { return "Your spending is balanced this month." }
-        
-        // Construct sentence
-        if traits.contains("Great Saver") {
-            return "You are saving 20% more than usual. Keeping fixed costs low!"
-        }
-        if traits.contains("Weekend Spender") {
-           return "Most of your spending happens on weekends. Try limiting Saturday splurges."
-        }
-         if traits.contains("Foodie") {
-           return "Food accounts for \(Int(foodPct * 100))% of your spending. Cooking at home could save you ~฿2,000."
-        }
-        
-        return "You're a \(traits.joined(separator: " & ")). Watch out for impulse buys!"
-    }
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkles")
-                .foregroundColor(theme.primary)
-                .font(.title2)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Insight")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                    .textCase(.uppercase)
-
-                Text(insightText)
-                    .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(theme.primary.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.primary.opacity(0.1), lineWidth: 1))
-        .padding(.horizontal)
-    }
-}
-
 // Helpers
 extension Int {
     var formattedWithSeparator: String {
@@ -786,120 +556,11 @@ extension Int {
     }
 }
 
-struct MonthlyTotalsBar: Identifiable {
-    let id = UUID()
-    let month: Date
-    let expense: Double
-}
-
-struct MonthlyTotalsChart: View {
-    let transactions: [Transaction]
-    @EnvironmentObject var theme: ThemeManager
-
-    private var bars: [MonthlyTotalsBar] {
-        let calendar = Calendar.current
-        let today = Date()
-        return (0..<6).reversed().compactMap { offset -> MonthlyTotalsBar? in
-            guard let month = calendar.date(byAdding: .month, value: -offset, to: today) else { return nil }
-            let year  = calendar.component(.year,  from: month)
-            let mComp = calendar.component(.month, from: month)
-            let total = transactions
-                .filter {
-                    $0.type == .expense &&
-                    calendar.component(.year,  from: $0.date) == year &&
-                    calendar.component(.month, from: $0.date) == mComp
-                }
-                .reduce(0.0) { $0 + $1.amount }
-            return MonthlyTotalsBar(month: month, expense: total)
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Monthly Spending")
-                .font(.headline)
-                .foregroundColor(theme.textPrimary)
-            Chart(bars) { bar in
-                BarMark(
-                    x: .value("Month", bar.month, unit: .month),
-                    y: .value("Expense", bar.expense)
-                )
-                .foregroundStyle(theme.primary)
-                .cornerRadius(6)
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .month)) {
-                    AxisValueLabel(format: .dateTime.month(.abbreviated))
-                        .foregroundStyle(theme.textSecondary)
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) {
-                    AxisValueLabel()
-                        .foregroundStyle(theme.textSecondary)
-                }
-            }
-            .frame(height: 160)
-        }
-        .padding()
-        .background(theme.cardBackground)
-        .cornerRadius(16)
-        .padding(.horizontal)
-    }
-}
-
 struct AnalyticsView_Previews: PreviewProvider {
     static var previews: some View {
         AnalyticsView()
             .environmentObject(TransactionStore())
             .environmentObject(ThemeManager())
-    }
-}
-
-private struct MascotInsightPill: View {
-    let transactions: [Transaction]
-    @EnvironmentObject var theme: ThemeManager
-
-    private var insight: String {
-        let calendar = Calendar.current
-        let weekendTotal = transactions
-            .filter { $0.type == .expense }
-            .filter {
-                let wd = calendar.component(.weekday, from: $0.date)
-                return wd == 1 || wd == 7
-            }
-            .reduce(0.0) { $0 + $1.amount }
-        let total = transactions.filter { $0.type == .expense }.reduce(0.0) { $0 + $1.amount }
-        guard total > 0 else { return "Looking good this month!" }
-        let pct = Int((weekendTotal / total) * 100)
-        if pct > 40 {
-            return "\(pct)% of spending lands on weekends. Weekdays are your savings days."
-        } else if pct < 20 {
-            return "You're a weekday spender. Treat yourself a little on weekends!"
-        }
-        return "Your spending is evenly spread through the week."
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            MascotView(size: 28, mood: .sleepy)
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(theme.primary.opacity(0.15))
-                )
-            Text(insight)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textPrimary)
-                .lineSpacing(2)
-            Spacer()
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.primary.opacity(0.10))
-        )
-        .padding(.horizontal, 20)
     }
 }
 
