@@ -69,8 +69,14 @@ struct AnalyticsView: View {
                 
                 // 2) Summary Stats
                 SummaryStatsBoard(stats: monthStats)
-                
-                // 3) Filter Tabs
+
+                // 3) Expense Trend Chart
+                ExpenseTrendChart(
+                    transactions: transactionStore.getAllTransactions(),
+                    currentDate: currentDate
+                )
+
+                // 4) Filter Tabs
                 TypeFilterTabs(selectedTab: $selectedTab)
                 
                 // 4) Main Donut (Category Breakdown)
@@ -539,11 +545,102 @@ struct CategoryPerformanceList: View {
 struct CategoryDetailView: View {
     let category: ExpenseCategory
     let transactions: [Transaction]
-    
+
     var body: some View {
         TransactionListView(customTransactions: transactions)
             .navigationTitle(category.displayName)
             .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ExpenseTrendChart: View {
+    let transactions: [Transaction]
+    let currentDate: Date
+    @EnvironmentObject var theme: ThemeManager
+
+    private var monthlyData: [(month: Date, total: Double)] {
+        expenseTotals(from: transactions, months: 12, referenceDate: currentDate)
+    }
+
+    private var sixMonthAvg: Double {
+        let last6 = expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
+        let sum = last6.reduce(0.0) { $0 + $1.total }
+        return last6.isEmpty ? 0 : sum / Double(last6.count)
+    }
+
+    private var sixMonthLow: Double {
+        expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
+            .map(\.total).min() ?? 0
+    }
+
+    private var currentTotal: Double {
+        monthlyData.last?.total ?? 0
+    }
+
+    private var vsAvgPct: Double {
+        guard sixMonthAvg > 0 else { return 0 }
+        return ((currentTotal - sixMonthAvg) / sixMonthAvg) * 100
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Spending Over Time")
+                .font(.headline)
+                .foregroundColor(theme.textPrimary)
+
+            Chart(monthlyData, id: \.month) { item in
+                AreaMark(
+                    x: .value("Month", item.month, unit: .month),
+                    y: .value("Expense", item.total)
+                )
+                .foregroundStyle(theme.expense.opacity(0.15))
+
+                LineMark(
+                    x: .value("Month", item.month, unit: .month),
+                    y: .value("Expense", item.total)
+                )
+                .foregroundStyle(theme.expense)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+
+                if item.month == monthlyData.last?.month {
+                    PointMark(
+                        x: .value("Month", item.month, unit: .month),
+                        y: .value("Expense", item.total)
+                    )
+                    .foregroundStyle(theme.expense)
+                    .symbolSize(40)
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .month)) {
+                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisValueLabel()
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            .frame(height: 160)
+
+            HStack {
+                Text("6-mo low: \(sixMonthLow.formattedCurrency)")
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+                Spacer()
+                let isHigher = vsAvgPct >= 0
+                Text("\(isHigher ? "↑" : "↓") \(Int(abs(vsAvgPct)))% vs avg")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(isHigher ? theme.expense : theme.income)
+            }
+        }
+        .padding()
+        .background(theme.cardBackground)
+        .cornerRadius(16)
+        .padding(.horizontal)
     }
 }
 
