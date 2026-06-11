@@ -565,35 +565,38 @@ struct TopTransactionsList: View {
                     .foregroundColor(theme.textPrimary)
 
                 ForEach(top5) { tx in
-                    HStack(spacing: 12) {
-                        let cat = tx.categoryId ?? .others
-                        Image(systemName: cat.icon)
-                            .foregroundColor(cat.color)
-                            .font(.subheadline)
-                            .frame(width: 36, height: 36)
-                            .background(cat.color.opacity(0.12))
-                            .cornerRadius(10)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(tx.description.isEmpty ? cat.displayName : tx.description)
+                    NavigationLink(destination: TransactionListView(customTransactions: [tx])) {
+                        HStack(spacing: 12) {
+                            let cat = tx.categoryId ?? .others
+                            Image(systemName: cat.icon)
+                                .foregroundColor(cat.color)
                                 .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1)
+                                .frame(width: 36, height: 36)
+                                .background(cat.color.opacity(0.12))
+                                .cornerRadius(10)
 
-                            let dateStr = tx.date.formatted(.dateTime.month(.abbreviated).day())
-                            Text("\(cat.displayName) · \(dateStr)")
-                                .font(.caption)
-                                .foregroundColor(theme.textSecondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tx.description.isEmpty ? cat.displayName : tx.description)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(theme.textPrimary)
+                                    .lineLimit(1)
+
+                                let dateStr = tx.date.formatted(.dateTime.month(.abbreviated).day())
+                                Text("\(cat.displayName) · \(dateStr)")
+                                    .font(.caption)
+                                    .foregroundColor(theme.textSecondary)
+                            }
+
+                            Spacer()
+
+                            Text(tx.amount.formattedCurrency)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(theme.expense)
                         }
-
-                        Spacer()
-
-                        Text(tx.amount.formattedCurrency)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(theme.expense)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding()
@@ -751,7 +754,10 @@ private struct SparklineView: View {
             }
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
-            .chartYScale(domain: max(0, minVal - range * 0.1)...maxVal + range * 0.1)
+            .chartYScale(domain: {
+                let padding = range > 0 ? range * 0.1 : max(maxVal * 0.1, 1.0)
+                return max(0, minVal - padding)...(maxVal + padding)
+            }())
         }
     }
 }
