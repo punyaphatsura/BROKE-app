@@ -879,7 +879,8 @@ struct AnnualExpensesSection: View {
             }
         }
         .padding()
-        .background(theme.background)
+        .background(theme.cardBackground)
+        .cornerRadius(16)
         .padding(.horizontal)
     }
 }
