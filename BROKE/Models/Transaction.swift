@@ -186,6 +186,7 @@ struct Transaction: Identifiable, Codable {
     var bank: Bank?
     var imagePath: String?
     var subTransactions: [SubTransaction]? = nil
+    var isAnnual: Bool = false
 
     enum TransactionSource: String, Codable {
         case manual

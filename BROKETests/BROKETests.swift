@@ -88,3 +88,47 @@ struct AnalyticsHelpersTests {
         #expect(abs((result[todayWd] ?? 0) - expected) < 0.01)
     }
 }
+
+struct AnnualExpenseTests {
+
+    private func makeAnnual(amount: Double, year: Int) -> Transaction {
+        var components = DateComponents()
+        components.year = year
+        components.month = 6
+        components.day = 1
+        let date = Calendar.current.date(from: components)!
+        return Transaction(amount: amount, description: "annual test", date: date, type: .expense, source: .manual, isAnnual: true)
+    }
+
+    private func makeRegular(amount: Double) -> Transaction {
+        Transaction(amount: amount, description: "regular", date: Date(), type: .expense, source: .manual)
+    }
+
+    @Test func annualExpenses_filtersAnnualOnly() {
+        let a = makeAnnual(amount: 12000, year: 2025)
+        let r = makeRegular(amount: 500)
+        let result = annualExpenses(from: [a, r], year: 2025)
+        #expect(result.count == 1)
+        #expect(result[0].amount == 12000)
+    }
+
+    @Test func annualExpenses_filtersCorrectYear() {
+        let a2025 = makeAnnual(amount: 12000, year: 2025)
+        let a2024 = makeAnnual(amount: 5000, year: 2024)
+        let result = annualExpenses(from: [a2025, a2024], year: 2025)
+        #expect(result.count == 1)
+        #expect(result[0].amount == 12000)
+    }
+
+    @Test func annualExpenses_ignoresIncomeWithAnnualFlag() {
+        var income = makeAnnual(amount: 100000, year: 2025)
+        income.type = .income
+        let result = annualExpenses(from: [income], year: 2025)
+        #expect(result.isEmpty)
+    }
+
+    @Test func annualExpenses_emptyWhenNone() {
+        let result = annualExpenses(from: [makeRegular(amount: 100)], year: 2025)
+        #expect(result.isEmpty)
+    }
+}

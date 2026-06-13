@@ -982,3 +982,13 @@ func weekdayAverages(
     }
     return result
 }
+
+/// Returns all expense transactions that are marked as annual for the given calendar year.
+func annualExpenses(from transactions: [Transaction], year: Int) -> [Transaction] {
+    let calendar = Calendar.current
+    return transactions.filter {
+        $0.type == .expense &&
+        $0.isAnnual &&
+        calendar.component(.year, from: $0.date) == year
+    }
+}
