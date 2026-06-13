@@ -53,6 +53,7 @@ struct AddTransactionView: View {
     @State private var showMoreDetails: Bool = false
 
     @State private var subTransactionError: String? = nil
+    @State private var isAnnual: Bool = false
 
     @State private var isCategoryExpanded: Bool = false
     @FocusState private var focusedField: Field?
@@ -283,7 +284,8 @@ struct AddTransactionView: View {
         sender = transaction.sender ?? ""
         receiver = transaction.receiver ?? ""
         refId = transaction.refId ?? ""
-        
+        isAnnual = transaction.isAnnual
+
         // Handle SubTransactions
         if let subs = transaction.subTransactions {
             draftSubTransactions = subs.map { DraftSubTransaction(amount: String($0.amount), category: $0.categoryId, note: $0.note) }
@@ -324,6 +326,7 @@ struct AddTransactionView: View {
             transaction.bank = selectedBank == .unknown ? nil : selectedBank
             transaction.refId = refId.isEmpty ? nil : refId
             transaction.subTransactions = finalSubs
+            transaction.isAnnual = type == .expense ? isAnnual : false
 
             transactionStore.updateTransaction(transaction)
         } else {
@@ -340,7 +343,8 @@ struct AddTransactionView: View {
                 incomeCategoryId: type == .income ? selectedIncomeCategory : nil,
                 bank: selectedBank == .unknown ? nil : selectedBank,
                 imagePath: nil,
-                subTransactions: finalSubs
+                subTransactions: finalSubs,
+                isAnnual: type == .expense ? isAnnual : false
             )
             transactionStore.addTransaction(transaction)
         }
@@ -537,6 +541,40 @@ struct AddTransactionView: View {
 
                         if type == .expense {
                             subTransactionsSection
+
+                            // MARK: - Annual Expense Toggle
+                            VStack(spacing: 8) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Annual Expense")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("กระจายเป็น ÷12 ต่อเดือนใน Analytics")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textSecondary)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $isAnnual)
+                                        .labelsHidden()
+                                        .tint(theme.accent)
+                                }
+                                .padding()
+                                .background(theme.cardBackground)
+                                .cornerRadius(16)
+
+                                if isAnnual, let amtValue = Double(amount), amtValue > 0 {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "calendar.badge.clock")
+                                            .font(.caption)
+                                        Text("฿\(amtValue.formattedCurrency) จะแสดงเต็มจำนวนในเดือนที่จ่าย และนับเป็น ≈ ฿\(Int(amtValue / 12).formattedWithSeparator)/เดือน ใน Analytics")
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(theme.accent)
+                                    .padding(.horizontal, 4)
+                                }
+                            }
+                            .padding(.horizontal)
                         }
 
                         // MARK: - Slip Image
@@ -584,6 +622,11 @@ struct AddTransactionView: View {
 
                         // Bottom Spacer
                         Spacer(minLength: 50)
+                    }
+                    .onChange(of: type) { _, newType in
+                        if newType != .expense {
+                            isAnnual = false
+                        }
                     }
                 }
                 .background(theme.background)
