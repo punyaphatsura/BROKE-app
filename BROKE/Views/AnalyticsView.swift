@@ -638,24 +638,31 @@ struct CategoryPerformanceList: View {
     }
 
     private var rows: [CategoryPerf] {
+        let calendar = Calendar.current
+        // Call getAllTransactions() once and pre-bucket flattened expense txs by year*100+month
+        let allExpense = transactionStore.getAllTransactions().filter { $0.type == .expense }
+        var monthBuckets: [Int: [Transaction]] = [:]
+        for date in previous3Months {
+            let y = calendar.component(.year, from: date)
+            let m = calendar.component(.month, from: date)
+            let key = y * 100 + m
+            monthBuckets[key] = flattenTransactions(allExpense.filter {
+                calendar.component(.year, from: $0.date) == y &&
+                calendar.component(.month, from: $0.date) == m
+            })
+        }
+
         let grouped = Dictionary(grouping: currentTransactions, by: { $0.categoryId ?? .others })
         var result: [CategoryPerf] = []
-        let calendar = Calendar.current
 
         for (cat, txs) in grouped {
             let currentSum = txs.reduce(0.0) { $0 + $1.amount }
-
             var perMonth: [Double] = []
             for date in previous3Months.reversed() { // reversed: oldest first
                 let y = calendar.component(.year, from: date)
                 let m = calendar.component(.month, from: date)
-                let monthTxs = transactionStore.getAllTransactions().filter {
-                    let ty = calendar.component(.year, from: $0.date)
-                    let tm = calendar.component(.month, from: $0.date)
-                    return ty == y && tm == m && $0.type == .expense
-                }
-                let flattened = flattenTransactions(monthTxs)
-                let catSum = flattened.filter { $0.categoryId == cat }
+                let catSum = (monthBuckets[y * 100 + m] ?? [])
+                    .filter { $0.categoryId == cat }
                     .reduce(0.0) { $0 + $1.amount }
                 perMonth.append(catSum)
             }

@@ -61,31 +61,29 @@ struct HomeView: View {
         return grouped.sorted { $0.key > $1.key }
     }
 
-    // Ordered list of all transactions as displayed (date desc, then time desc within day)
-    private var orderedTransactions: [Transaction] {
-        groupedTransactions.flatMap { $0.value.sorted { $0.date > $1.date } }
-    }
+    // Cached per-transaction cumulative totals and section dates.
+    // Rebuilt when transactions change, NOT on every scroll frame.
+    @State private var cumExpenseCache: [UUID: Double] = [:]
+    @State private var cumIncomeCache: [UUID: Double] = [:]
+    @State private var sectionDateCache: [UUID: Date] = [:]
 
-    // For each transaction: running total of expense+income from that row DOWN to the last row
-    private var cumulativeFromTransactionDown: [UUID: (expense: Double, income: Double)] {
-        var cumExpense = 0.0
-        var cumIncome = 0.0
-        var result = [UUID: (expense: Double, income: Double)]()
-        for txn in orderedTransactions.reversed() {
-            if txn.type == .expense { cumExpense += txn.amount }
-            else if txn.type == .income { cumIncome += txn.amount }
-            result[txn.id] = (cumExpense, cumIncome)
+    private func rebuildScrollCaches() {
+        let ordered = groupedTransactions.flatMap { $0.value.sorted { $0.date > $1.date } }
+        var cumE = 0.0, cumI = 0.0
+        var expD = [UUID: Double](), incD = [UUID: Double]()
+        for txn in ordered.reversed() {
+            if txn.type == .expense { cumE += txn.amount }
+            else if txn.type == .income { cumI += txn.amount }
+            expD[txn.id] = cumE
+            incD[txn.id] = cumI
         }
-        return result
-    }
-
-    // Maps transaction ID → its section date (for the sticky header date label)
-    private var transactionSectionDate: [UUID: Date] {
-        var result = [UUID: Date]()
+        cumExpenseCache = expD
+        cumIncomeCache = incD
+        var dates = [UUID: Date]()
         for section in groupedTransactions {
-            for txn in section.value { result[txn.id] = section.key }
+            for txn in section.value { dates[txn.id] = section.key }
         }
-        return result
+        sectionDateCache = dates
     }
 
     private var annualMonthlyBurden: Double {
@@ -150,12 +148,14 @@ struct HomeView: View {
             }
             .onAppear {
                 updateTransactionsList()
+                rebuildScrollCaches()
                 if newSlipsCount == 0 && unprocessedCount > 0 {
                     newSlipsCount = unprocessedCount
                 }
             }
             .onChange(of: viewModel.currentMonth) { updateTransactionsList() }
             .onChange(of: viewModel.currentYear) { updateTransactionsList() }
+            .onReceive(transactionStore.$transactions) { _ in rebuildScrollCaches() }
 
             // Sticky cumulative header overlay
             if showStickyHeader {
@@ -410,16 +410,13 @@ struct HomeView: View {
 
         guard let (txnId, _) = candidate else { return }
 
-        let cumulative = cumulativeFromTransactionDown
-        let sectionDates = transactionSectionDate
-        let data = cumulative[txnId]
-        let date = sectionDates[txnId] ?? stickyDate
+        let date = sectionDateCache[txnId] ?? stickyDate
 
         withAnimation(.easeInOut(duration: 0.2)) {
             showStickyHeader = true
             stickyDate = date
-            stickyExpense = data?.expense ?? 0
-            stickyIncome = data?.income ?? 0
+            stickyExpense = cumExpenseCache[txnId] ?? 0
+            stickyIncome = cumIncomeCache[txnId] ?? 0
         }
     }
 }
