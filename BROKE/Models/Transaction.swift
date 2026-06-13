@@ -192,4 +192,31 @@ struct Transaction: Identifiable, Codable {
         case manual
         case scan
     }
+
+}
+
+extension Transaction {
+    private enum CodingKeys: String, CodingKey {
+        case id, refId, amount, description, date, sender, receiver
+        case type, source, categoryId, incomeCategoryId, bank, imagePath, subTransactions, isAnnual
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        refId = try c.decodeIfPresent(String.self, forKey: .refId)
+        amount = try c.decode(Double.self, forKey: .amount)
+        description = try c.decode(String.self, forKey: .description)
+        date = try c.decode(Date.self, forKey: .date)
+        sender = try c.decodeIfPresent(String.self, forKey: .sender)
+        receiver = try c.decodeIfPresent(String.self, forKey: .receiver)
+        type = try c.decode(TransactionType.self, forKey: .type)
+        source = try c.decode(TransactionSource.self, forKey: .source)
+        categoryId = try c.decodeIfPresent(ExpenseCategory.self, forKey: .categoryId)
+        incomeCategoryId = try c.decodeIfPresent(IncomeCategory.self, forKey: .incomeCategoryId)
+        bank = try c.decodeIfPresent(Bank.self, forKey: .bank)
+        imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        subTransactions = try c.decodeIfPresent([SubTransaction].self, forKey: .subTransactions)
+        isAnnual = (try c.decodeIfPresent(Bool.self, forKey: .isAnnual)) ?? false
+    }
 }
