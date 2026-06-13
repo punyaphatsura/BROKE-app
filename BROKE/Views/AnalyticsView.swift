@@ -60,6 +60,11 @@ struct AnalyticsView: View {
         return dates
     }
 
+    private var annualTransactionsForYear: [Transaction] {
+        let year = Calendar.current.component(.year, from: currentDate)
+        return annualExpenses(from: transactionStore.getAllTransactions(), year: year)
+    }
+
     // MARK: - Body
     var body: some View {
         ScrollView {
@@ -100,6 +105,14 @@ struct AnalyticsView: View {
                         previous3Months: previous3Months,
                         transactionStore: transactionStore
                     )
+
+                    // 7. Annual expenses
+                    if !annualTransactionsForYear.isEmpty {
+                        AnnualExpensesSection(
+                            transactions: annualTransactionsForYear,
+                            year: Calendar.current.component(.year, from: currentDate)
+                        )
+                    }
                 }
 
                 Spacer(minLength: 50)
@@ -770,6 +783,104 @@ struct CategoryDetailView: View {
         TransactionListView(customTransactions: transactions)
             .navigationTitle(category.displayName)
             .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct AnnualExpensesSection: View {
+    let transactions: [Transaction]
+    let year: Int
+    @EnvironmentObject var theme: ThemeManager
+
+    private var total: Double { transactions.reduce(0.0) { $0 + $1.amount } }
+    private var monthlyAverage: Double { total / 12.0 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack {
+                Text("Annual Expenses")
+                    .font(.headline)
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Text(String(year))
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(theme.cardBackground)
+                    .cornerRadius(8)
+            }
+
+            // Summary
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ยอดรวมทั้งปี")
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                    Text(total.formattedCurrency)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(theme.expense)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("เฉลี่ยต่อเดือน")
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                    Text(monthlyAverage.formattedCurrency)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(theme.accent)
+                }
+            }
+            .padding()
+            .background(theme.cardBackground)
+            .cornerRadius(12)
+
+            // List
+            let sorted = transactions.sorted { $0.date < $1.date }
+            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, tx in
+                let cat = tx.categoryId ?? .others
+                HStack(spacing: 12) {
+                    Image(systemName: cat.icon)
+                        .foregroundColor(cat.color)
+                        .font(.subheadline)
+                        .frame(width: 38, height: 38)
+                        .background(cat.color.opacity(0.12))
+                        .cornerRadius(10)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tx.description.isEmpty ? cat.displayName : tx.description)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Text("\(cat.displayName) · \(tx.date.formatted(.dateTime.month(.abbreviated)))")
+                            .font(.caption)
+                            .foregroundColor(theme.textSecondary)
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(tx.amount.formattedCurrency)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(theme.expense)
+                        Text("≈ \((tx.amount / 12).formattedCurrency)/เดือน")
+                            .font(.caption)
+                            .foregroundColor(theme.accent)
+                    }
+                }
+
+                if index < sorted.count - 1 {
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .background(theme.background)
+        .padding(.horizontal)
     }
 }
 
