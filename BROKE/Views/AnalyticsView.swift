@@ -34,15 +34,22 @@ struct AnalyticsView: View {
         getTransactions(for: currentDate)
     }
     
-    // Filtered by selected Tab (Expense/Income/Transfer)
+    // Filtered by selected Tab; annual expenses scaled to ÷12 so chart matches summary stats
     private var chartTransactions: [Transaction] {
-        currentMonthTransactions.filter { $0.type == selectedTab }
+        currentMonthTransactions.filter { $0.type == selectedTab }.map { tx in
+            guard tx.isAnnual, selectedTab == .expense else { return tx }
+            var scaled = tx
+            scaled.amount = tx.amount / 12.0
+            return scaled
+        }
     }
-    
-    // Summary Stats (Income, Expense, Net)
+
+    // Summary Stats: annual expenses spread evenly (÷12) instead of lump-sum in paid month
     private var monthStats: (income: Double, expense: Double, balance: Double) {
         let income = currentMonthTransactions.filter { $0.type == .income }.reduce(0.0) { $0 + $1.amount }
-        let expense = currentMonthTransactions.filter { $0.type == .expense }.reduce(0.0) { $0 + $1.amount }
+        let regularExpense = currentMonthTransactions.filter { $0.type == .expense && !$0.isAnnual }.reduce(0.0) { $0 + $1.amount }
+        let annualBurden = annualTransactionsForYear.reduce(0.0) { $0 + $1.amount } / 12.0
+        let expense = regularExpense + annualBurden
         return (income, expense, income - expense)
     }
     
