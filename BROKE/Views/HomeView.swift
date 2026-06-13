@@ -88,6 +88,12 @@ struct HomeView: View {
         return result
     }
 
+    private var annualMonthlyBurden: Double {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return annualExpenses(from: transactionStore.getAllTransactions(), year: currentYear)
+            .reduce(0.0) { $0 + $1.amount } / 12.0
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             theme.background.ignoresSafeArea()
@@ -247,6 +253,17 @@ struct HomeView: View {
                     HeroStatPill(label: "OUT", amount: transactionStore.totalExpense(), textColor: theme.cardBackground)
                 }
                 .padding(.top, 14)
+
+                if annualMonthlyBurden > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar.circle")
+                            .font(.caption)
+                        Text("Annual burden ≈ \(annualMonthlyBurden.formattedCurrency)/mo")
+                            .font(.caption)
+                    }
+                    .foregroundColor(theme.textSecondary)
+                    .padding(.top, 4)
+                }
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
