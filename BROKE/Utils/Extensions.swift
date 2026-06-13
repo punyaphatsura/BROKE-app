@@ -16,6 +16,16 @@ extension Double {
     }
 }
 
+/// Returns all expense transactions marked as annual for the given calendar year.
+func annualExpenses(from transactions: [Transaction], year: Int) -> [Transaction] {
+    let calendar = Calendar.current
+    return transactions.filter {
+        $0.type == .expense &&
+        $0.isAnnual &&
+        calendar.component(.year, from: $0.date) == year
+    }
+}
+
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
