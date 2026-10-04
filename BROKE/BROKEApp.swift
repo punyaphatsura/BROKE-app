@@ -27,13 +27,20 @@ struct BROKEApp: App {
     @StateObject var transactionStore = TransactionStore()
     @StateObject var photoService = PhotoService()
     @StateObject var themeManager = ThemeManager()
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(transactionStore)
-                .environmentObject(photoService)
-                .environmentObject(themeManager)
+            Group {
+                if hasCompletedOnboarding || transactionStore.hadDataAtLaunch {
+                    ContentView()
+                } else {
+                    WelcomeView { hasCompletedOnboarding = true }
+                }
+            }
+            .environmentObject(transactionStore)
+            .environmentObject(photoService)
+            .environmentObject(themeManager)
         }
     }
 }

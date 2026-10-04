@@ -79,65 +79,24 @@ class SettingsViewModel: ObservableObject {
         importMessage = "Reading file..."
         errorMessage = nil
 
-        guard url.startAccessingSecurityScopedResource() else {
-            errorMessage = "Permission denied to access file."
-            isImporting = false
-            return
-        }
-
-        // Read data immediately while we have access
         let fileContent: String
         do {
-            let data = try Data(contentsOf: url)
-            guard let content = String(data: data, encoding: .utf8) else {
-                url.stopAccessingSecurityScopedResource()
-                errorMessage = "Could not read file as UTF-8"
-                isImporting = false
-                return
-            }
-            fileContent = content
+            fileContent = try CSVImportService.readFile(at: url)
         } catch {
-            url.stopAccessingSecurityScopedResource()
             errorMessage = "Read Failed: \(error.localizedDescription)"
             isImporting = false
             return
         }
 
-        url.stopAccessingSecurityScopedResource()
-
         Task {
-            await MainActor.run {
-                self.importMessage = "Analyzing..."
-            }
-
+            importMessage = "Analyzing..."
             do {
-                let slips = try await csvService.parseCSV(content: fileContent)
-
-                await MainActor.run {
-                    self.importMessage = "Importing \(slips.count) transactions..."
-
-                    var newCount = 0
-                    var updateCount = 0
-
-                    for slip in slips {
-                        if slip.refId != "-", store.getAllTransactions().contains(where: { $0.refId == slip.refId }) {
-                            updateCount += 1
-                        } else {
-                            newCount += 1
-                        }
-
-                        store.upsertTransaction(from: slip)
-                    }
-
-                    self.importMessage = "Success: \(newCount) added, \(updateCount) updated."
-                    self.isImporting = false
-                }
+                let result = try await csvService.importCSV(content: fileContent, into: store)
+                importMessage = "Success: \(result.added) added, \(result.updated) updated."
             } catch {
-                await MainActor.run {
-                    self.errorMessage = "Import Failed: \(error.localizedDescription)"
-                    self.isImporting = false
-                }
+                errorMessage = "Import Failed: \(error.localizedDescription)"
             }
+            isImporting = false
         }
     }
 }
