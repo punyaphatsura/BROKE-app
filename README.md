@@ -28,8 +28,8 @@ A personal expense tracking iOS application built with SwiftUI, designed to simp
   - **Intelligent Categorization**: Auto-suggests expense categories (Food, Transport, Shopping, etc.) based on the receiver/payee name.
 
 - **Data Management**:
-  - **CSV Export**: Export your entire transaction history to CSV for external analysis.
-  - **CSV Import**: Import existing data (supports specific Thai formats).
+  - **CSV Export**: Export your entire transaction history to CSV, including sub-transactions and annual flags, for analysis or backup.
+  - **CSV Import**: Import a previous BROKE export or a Meow Jod export. On first launch you can restore an export before entering the app.
   - **Local Storage**: Data is persisted securely on-device using `UserDefaults`.
 
 ## Tech Stack

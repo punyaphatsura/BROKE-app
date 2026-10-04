@@ -137,11 +137,15 @@ struct AnalyticsView: View {
 struct MonthYearNavigator: View {
     @Binding var currentDate: Date
     @EnvironmentObject var theme: ThemeManager
-    
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM yy"
+        return f
+    }()
+
     private var dateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM yy"
-        return formatter.string(from: currentDate)
+        Self.dateFormatter.string(from: currentDate)
     }
     
     func changeMonth(by value: Int) {
@@ -646,17 +650,17 @@ struct CategoryPerformanceList: View {
 
     private var rows: [CategoryPerf] {
         let calendar = Calendar.current
-        // Call getAllTransactions() once and pre-bucket flattened expense txs by year*100+month
         let allExpense = transactionStore.getAllTransactions().filter { $0.type == .expense }
+        // Pre-compute year*100+month key for each transaction once (single Calendar pass)
+        let keyedExpense: [(key: Int, tx: Transaction)] = allExpense.map { tx in
+            let c = calendar.dateComponents([.year, .month], from: tx.date)
+            return ((c.year ?? 0) * 100 + (c.month ?? 0), tx)
+        }
         var monthBuckets: [Int: [Transaction]] = [:]
         for date in previous3Months {
-            let y = calendar.component(.year, from: date)
-            let m = calendar.component(.month, from: date)
-            let key = y * 100 + m
-            monthBuckets[key] = flattenTransactions(allExpense.filter {
-                calendar.component(.year, from: $0.date) == y &&
-                calendar.component(.month, from: $0.date) == m
-            })
+            let c = calendar.dateComponents([.year, .month], from: date)
+            let key = (c.year ?? 0) * 100 + (c.month ?? 0)
+            monthBuckets[key] = flattenTransactions(keyedExpense.filter { $0.key == key }.map(\.tx))
         }
 
         let grouped = Dictionary(grouping: currentTransactions, by: { $0.categoryId ?? .others })
@@ -909,7 +913,7 @@ struct ExpenseTrendChart: View {
     }
 
     private var last6MonthsData: [(month: Date, total: Double)] {
-        expenseTotals(from: transactions, months: 6, referenceDate: currentDate)
+        Array(monthlyData.suffix(6))
     }
 
     private var sixMonthAvg: Double {
@@ -1037,19 +1041,37 @@ func expenseTotals(
     referenceDate: Date
 ) -> [(month: Date, total: Double)] {
     let calendar = Calendar.current
-    return (0..<months).reversed().compactMap { offset -> (Date, Double)? in
+    // Build target month keys in a single pre-pass (year*100+month → monthStart)
+    var monthStarts: [Int: Date] = [:]
+    for offset in 0..<months {
         guard let date = calendar.date(byAdding: .month, value: -offset, to: referenceDate),
-              let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: date))
-        else { return nil }
-        let y = calendar.component(.year, from: date)
-        let m = calendar.component(.month, from: date)
-        let total = transactions
-            .filter { $0.type == .expense
-                && calendar.component(.year, from: $0.date) == y
-                && calendar.component(.month, from: $0.date) == m }
-            .reduce(0.0) { $0 + $1.amount }
-        return (monthStart, total)
+              let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date))
+        else { continue }
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        let key = (comps.year ?? 0) * 100 + (comps.month ?? 0)
+        monthStarts[key] = start
     }
+    var totals: [Int: Double] = [:]
+    for tx in transactions where tx.type == .expense {
+        if tx.isAnnual {
+            // Spread ÷12 across all 12 months of the transaction's year
+            let txYear = calendar.component(.year, from: tx.date)
+            let monthly = tx.amount / 12.0
+            for month in 1...12 {
+                let key = txYear * 100 + month
+                if monthStarts[key] != nil {
+                    totals[key, default: 0.0] += monthly
+                }
+            }
+        } else {
+            let comps = calendar.dateComponents([.year, .month], from: tx.date)
+            let key = (comps.year ?? 0) * 100 + (comps.month ?? 0)
+            if monthStarts[key] != nil {
+                totals[key, default: 0.0] += tx.amount
+            }
+        }
+    }
+    return monthStarts.keys.sorted().map { (monthStarts[$0]!, totals[$0] ?? 0.0) }
 }
 
 /// Returns a dict of day-of-month → total expense for the given month.

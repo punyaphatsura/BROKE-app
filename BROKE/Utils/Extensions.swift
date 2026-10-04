@@ -7,12 +7,16 @@ import Foundation
 import SwiftUI
 
 extension Double {
+    private static let currencyFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 2
+        return f
+    }()
+
     var formattedCurrency: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: self)) ?? "\(self)"
+        Self.currencyFormatter.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }
 

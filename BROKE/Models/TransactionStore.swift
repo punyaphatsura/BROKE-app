@@ -13,8 +13,11 @@ class TransactionStore: ObservableObject {
     private var allTransactions: [Transaction] = []
     
     private let saveKey = "transactions"
-    
+    /// True when this install already had a saved ledger at startup (skips the welcome screen).
+    let hadDataAtLaunch: Bool
+
     init() {
+        self.hadDataAtLaunch = UserDefaults.standard.data(forKey: saveKey) != nil
         self.allTransactions = []
         self.allTransactions = loadTransactions()
         
@@ -35,7 +38,16 @@ class TransactionStore: ObservableObject {
         
         saveTransactions()
     }
-    
+
+    /// Same as calling addTransaction for each item, but persists once.
+    func addTransactions(_ newTransactions: [Transaction]) {
+        guard !newTransactions.isEmpty else { return }
+        allTransactions.append(contentsOf: newTransactions)
+        transactions.append(contentsOf: newTransactions)
+        transactions.sort { $0.date > $1.date }
+        saveTransactions()
+    }
+
     func updateTransaction(_ transaction: Transaction) {
         if let index = allTransactions.firstIndex(where: { $0.id == transaction.id }) {
             allTransactions[index] = transaction
